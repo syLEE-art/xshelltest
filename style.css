@@ -1,8 +1,9 @@
 /* ==========================================
-   Network Control Center - Custom Styles
+   네트워크 관제 센터 - 커스텀 스타일 (한국어 버전)
    ==========================================
    - 네트워크 관제 센터 테마의 다크 모드 스타일
    - Tailwind CSS와 함께 사용
+   - Noto Sans KR 한국어 폰트 지원
    ========================================== */
 
 /* ==========================================
@@ -33,6 +34,11 @@
 /* ==========================================
    Global Styles
    ========================================== */
+
+/* 기본 폰트 설정 - 한국어 지원 */
+body {
+    font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+}
 
 /* 스크롤바 커스터마이징 */
 ::-webkit-scrollbar {
@@ -142,8 +148,8 @@
     font-size: 0.75rem;
     color: #6b7280;
     margin-bottom: 0.5rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
 }
 
 .input-field {
@@ -161,6 +167,8 @@
 
 .input-field::placeholder {
     color: #4b5563;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 0.875rem;
 }
 
 .input-field:focus {
@@ -206,10 +214,10 @@
     justify-content: center;
     gap: 0.75rem;
     padding: 1rem 2rem;
-    font-family: 'Orbitron', sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 0.875rem;
     font-weight: 600;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -217,7 +225,7 @@
     overflow: hidden;
 }
 
-/* Primary Button (Connect) */
+/* Primary Button (원격 접속) */
 .btn-primary {
     background: linear-gradient(135deg, var(--neon-cyan), #00b8c4);
     color: var(--dark-900);
@@ -234,7 +242,7 @@
     transform: translateY(0);
 }
 
-/* Secondary Button (Ping Test) */
+/* Secondary Button (상태 확인) */
 .btn-secondary {
     background: transparent;
     color: var(--neon-orange);
@@ -302,7 +310,7 @@
     box-shadow: 0 0 10px rgba(75, 85, 99, 0.3);
 }
 
-/* 온라인 상태 (녹색) */
+/* 정상 상태 (녹색) */
 .status-online {
     background: linear-gradient(135deg, #065f46, #064e3b);
     box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3);
@@ -314,7 +322,7 @@
     box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
 }
 
-/* 오프라인 상태 (빨강) */
+/* 응답없음 상태 (빨강) */
 .status-offline {
     background: linear-gradient(135deg, #7f1d1d, #5c1515);
     box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3);
@@ -326,7 +334,7 @@
     box-shadow: 0 0 30px rgba(255, 0, 85, 0.5);
 }
 
-/* 테스트 중 상태 (주황) */
+/* 확인중 상태 (주황) */
 .status-testing {
     background: linear-gradient(135deg, #78350f, #5c2d0f);
     box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3);
@@ -378,8 +386,7 @@
 .stat-label {
     font-size: 0.75rem;
     color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-weight: 500;
 }
 
 .stat-value {
@@ -390,7 +397,7 @@
 
 /* ==========================================
    Quick Access Items
-   - 빠른 접속 항목 스타일
+   - 즐겨찾기 항목 스타일
    ========================================== */
 
 .quick-access-item {
@@ -462,6 +469,7 @@
     gap: 0.75rem;
     animation: slide-in 0.3s ease-out;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    font-family: 'Noto Sans KR', sans-serif;
 }
 
 .toast-success {

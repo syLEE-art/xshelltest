@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Network Control Center | 네트워크 관제 센터</title>
+    <title>네트워크 관제 센터 | Network Control Center</title>
     
     <!-- ==========================================
-         Network Monitoring Dashboard
+         네트워크 모니터링 대시보드 (한국어 버전)
          - Author: Claude AI Assistant
          - Version: 1.0.0
          - Description: 원격 서버 접속 및 상태 모니터링 대시보드
@@ -19,7 +19,7 @@
     <!-- Google Fonts - 사이버펑크/테크 느낌의 폰트 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Custom Tailwind Configuration -->
     <script>
@@ -29,6 +29,7 @@
                     fontFamily: {
                         'mono': ['JetBrains Mono', 'monospace'],
                         'display': ['Orbitron', 'sans-serif'],
+                        'korean': ['Noto Sans KR', 'sans-serif'],
                     },
                     colors: {
                         // 커스텀 네온 컬러 팔레트
@@ -60,7 +61,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-dark-900 min-h-screen font-mono text-gray-300 overflow-x-hidden">
+<body class="bg-dark-900 min-h-screen font-korean text-gray-300 overflow-x-hidden">
     
     <!-- ==========================================
          Background Grid Effect
@@ -80,18 +81,18 @@
             <div class="inline-flex items-center gap-4 mb-4">
                 <div class="w-3 h-3 bg-neon-green rounded-full animate-pulse shadow-lg shadow-neon-green/50"></div>
                 <h1 class="font-display text-3xl md:text-4xl lg:text-5xl font-bold tracking-wider text-white">
-                    NETWORK <span class="text-neon-cyan">CONTROL</span>
+                    네트워크 <span class="text-neon-cyan">관제센터</span>
                 </h1>
                 <div class="w-3 h-3 bg-neon-green rounded-full animate-pulse shadow-lg shadow-neon-green/50"></div>
             </div>
             <p class="text-gray-500 tracking-widest text-sm">
-                REMOTE ACCESS & MONITORING DASHBOARD v1.0
+                원격 접속 및 서버 모니터링 대시보드 v1.0
             </p>
             <!-- 현재 시간 표시 -->
             <div class="mt-4 font-mono text-neon-cyan/70 text-sm">
                 <span id="current-time">--:--:--</span>
                 <span class="mx-2">|</span>
-                <span id="current-date">----.--.--</span>
+                <span id="current-date">----년 --월 --일</span>
             </div>
         </header>
 
@@ -111,9 +112,9 @@
                     <div class="card-header">
                         <div class="flex items-center gap-3">
                             <div class="w-2 h-2 bg-neon-cyan rounded-full"></div>
-                            <h2 class="font-display text-lg tracking-wider">REMOTE ACCESS</h2>
+                            <h2 class="font-display text-lg tracking-wider">원격 접속</h2>
                         </div>
-                        <div class="text-xs text-gray-500">SSH PROTOCOL</div>
+                        <div class="text-xs text-gray-500">SSH 프로토콜</div>
                     </div>
                     
                     <!-- Card Body -->
@@ -124,14 +125,14 @@
                             <!-- IP Address Input -->
                             <div class="input-group md:col-span-2">
                                 <label class="input-label">
-                                    <span class="text-neon-cyan">●</span> TARGET IP ADDRESS
+                                    <span class="text-neon-cyan">●</span> IP 주소
                                 </label>
                                 <div class="relative">
                                     <input 
                                         type="text" 
                                         id="ip-address" 
                                         class="input-field"
-                                        placeholder="192.168.1.100"
+                                        placeholder="예: 192.168.1.100"
                                         pattern="^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
                                         autocomplete="off"
                                     >
@@ -142,14 +143,14 @@
                             <!-- Port Input -->
                             <div class="input-group">
                                 <label class="input-label">
-                                    <span class="text-neon-orange">●</span> PORT (Optional)
+                                    <span class="text-neon-orange">●</span> 포트 (선택사항)
                                 </label>
                                 <div class="relative">
                                     <input 
                                         type="number" 
                                         id="port" 
                                         class="input-field"
-                                        placeholder="22"
+                                        placeholder="기본값: 22"
                                         min="1"
                                         max="65535"
                                     >
@@ -160,14 +161,14 @@
                             <!-- Username Input -->
                             <div class="input-group">
                                 <label class="input-label">
-                                    <span class="text-neon-purple">●</span> USERNAME (Optional)
+                                    <span class="text-neon-purple">●</span> 사용자 이름 (선택사항)
                                 </label>
                                 <div class="relative">
                                     <input 
                                         type="text" 
                                         id="username" 
                                         class="input-field"
-                                        placeholder="root"
+                                        placeholder="예: root"
                                         autocomplete="off"
                                     >
                                     <div class="input-underline"></div>
@@ -186,7 +187,7 @@
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                 </svg>
-                                <span>CONNECT</span>
+                                <span>Xshell 원격 접속</span>
                             </button>
                             
                             <!-- Ping Test Button -->
@@ -198,7 +199,7 @@
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                                 </svg>
-                                <span>PING TEST</span>
+                                <span>상태 확인</span>
                             </button>
                         </div>
                     </div>
@@ -212,9 +213,9 @@
                     <div class="card-header">
                         <div class="flex items-center gap-3">
                             <div class="w-2 h-2 bg-neon-green rounded-full animate-pulse"></div>
-                            <h2 class="font-display text-lg tracking-wider">RESPONSE TIME</h2>
+                            <h2 class="font-display text-lg tracking-wider">응답 속도</h2>
                         </div>
-                        <div class="text-xs text-gray-500" id="graph-status">WAITING...</div>
+                        <div class="text-xs text-gray-500" id="graph-status">대기 중...</div>
                     </div>
                     <div class="card-body">
                         <!-- Graph Container -->
@@ -231,7 +232,7 @@
                             <div id="graph-overlay" class="absolute inset-0 flex items-center justify-center">
                                 <div class="text-center">
                                     <div class="text-4xl mb-2 opacity-20">📊</div>
-                                    <div class="text-gray-600 text-sm">Run PING TEST to see graph</div>
+                                    <div class="text-gray-600 text-sm">상태 확인 버튼을 눌러 그래프를 확인하세요</div>
                                 </div>
                             </div>
                         </div>
@@ -239,11 +240,11 @@
                         <div class="flex items-center justify-center gap-6 mt-4 text-xs text-gray-500">
                             <div class="flex items-center gap-2">
                                 <div class="w-3 h-0.5 bg-neon-cyan"></div>
-                                <span>Response Time</span>
+                                <span>응답 시간</span>
                             </div>
                             <div class="flex items-center gap-2">
                                 <div class="w-3 h-0.5 bg-neon-orange opacity-50"></div>
-                                <span>Average</span>
+                                <span>평균값</span>
                             </div>
                         </div>
                     </div>
@@ -261,7 +262,7 @@
                     <div class="card-header">
                         <div class="flex items-center gap-3">
                             <div class="w-2 h-2 bg-neon-purple rounded-full"></div>
-                            <h2 class="font-display text-lg tracking-wider">STATUS</h2>
+                            <h2 class="font-display text-lg tracking-wider">현재 상태</h2>
                         </div>
                     </div>
                     <div class="card-body text-center">
@@ -276,16 +277,16 @@
                         <!-- Status Text -->
                         <div class="mb-4">
                             <div id="status-text" class="font-display text-2xl tracking-wider text-gray-500">
-                                STANDBY
+                                대기중
                             </div>
                             <div id="status-detail" class="text-xs text-gray-600 mt-1">
-                                Enter IP address to begin
+                                IP 주소를 입력해주세요
                             </div>
                         </div>
                         
                         <!-- Target Display -->
                         <div class="bg-dark-800 rounded-lg p-4 border border-dark-500">
-                            <div class="text-xs text-gray-600 mb-1">TARGET</div>
+                            <div class="text-xs text-gray-600 mb-1">대상 서버</div>
                             <div id="target-display" class="font-mono text-neon-cyan text-lg">
                                 ---.---.---.---
                             </div>
@@ -298,34 +299,34 @@
                     <div class="card-header">
                         <div class="flex items-center gap-3">
                             <div class="w-2 h-2 bg-neon-orange rounded-full"></div>
-                            <h2 class="font-display text-lg tracking-wider">STATISTICS</h2>
+                            <h2 class="font-display text-lg tracking-wider">통계 정보</h2>
                         </div>
                     </div>
                     <div class="card-body">
                         <div class="space-y-4">
                             <!-- Ping Count -->
                             <div class="stat-row">
-                                <span class="stat-label">Requests</span>
+                                <span class="stat-label">요청 횟수</span>
                                 <span id="stat-requests" class="stat-value">0</span>
                             </div>
                             <!-- Success Rate -->
                             <div class="stat-row">
-                                <span class="stat-label">Success Rate</span>
+                                <span class="stat-label">성공률</span>
                                 <span id="stat-success" class="stat-value text-neon-green">--%</span>
                             </div>
                             <!-- Average Response -->
                             <div class="stat-row">
-                                <span class="stat-label">Avg Response</span>
+                                <span class="stat-label">평균 응답</span>
                                 <span id="stat-avg" class="stat-value">-- ms</span>
                             </div>
                             <!-- Min Response -->
                             <div class="stat-row">
-                                <span class="stat-label">Min</span>
+                                <span class="stat-label">최소값</span>
                                 <span id="stat-min" class="stat-value text-neon-cyan">-- ms</span>
                             </div>
                             <!-- Max Response -->
                             <div class="stat-row">
-                                <span class="stat-label">Max</span>
+                                <span class="stat-label">최대값</span>
                                 <span id="stat-max" class="stat-value text-neon-red">-- ms</span>
                             </div>
                         </div>
@@ -337,7 +338,7 @@
                     <div class="card-header">
                         <div class="flex items-center gap-3">
                             <div class="w-2 h-2 bg-neon-green rounded-full"></div>
-                            <h2 class="font-display text-lg tracking-wider">QUICK ACCESS</h2>
+                            <h2 class="font-display text-lg tracking-wider">즐겨찾기</h2>
                         </div>
                     </div>
                     <div class="card-body">
@@ -345,7 +346,7 @@
                             <!-- Quick access items will be added dynamically -->
                             <div class="text-center text-gray-600 text-sm py-4">
                                 <div class="text-2xl mb-2 opacity-30">📌</div>
-                                No saved hosts yet
+                                저장된 호스트가 없습니다
                             </div>
                         </div>
                         <!-- Add to Quick Access Button -->
@@ -354,7 +355,7 @@
                             class="w-full mt-4 py-2 px-4 border border-dashed border-dark-500 rounded-lg text-gray-600 hover:border-neon-cyan hover:text-neon-cyan transition-all duration-300 text-sm"
                             onclick="saveCurrentHost()"
                         >
-                            + Save Current Host
+                            + 현재 호스트 저장
                         </button>
                     </div>
                 </div>
@@ -366,14 +367,14 @@
              ========================================== -->
         <footer class="mt-12 text-center text-gray-600 text-xs">
             <div class="flex items-center justify-center gap-4 mb-2">
-                <span>Network Control Center</span>
+                <span>네트워크 관제 센터</span>
                 <span>•</span>
                 <span>v1.0.0</span>
                 <span>•</span>
-                <span>SSH Protocol Handler Required</span>
+                <span>SSH 프로토콜 핸들러 필요</span>
             </div>
             <div class="text-gray-700">
-                For Xshell integration, ensure SSH protocol handler is configured in your system.
+                Xshell 연동을 위해 시스템에 SSH 프로토콜 핸들러가 설정되어 있어야 합니다.
             </div>
         </footer>
     </div>

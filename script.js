@@ -1,10 +1,10 @@
 /* ==========================================
-   Network Control Center - JavaScript
+   네트워크 관제 센터 - JavaScript (한국어 버전)
    ==========================================
    - 원격 접속 (SSH Protocol Handler)
-   - Ping Test (HTTP Fetch 기반)
+   - 상태 확인 (HTTP Fetch 기반)
    - 응답 시간 그래프 시각화
-   - Quick Access 저장 기능
+   - 즐겨찾기 저장 기능
    ========================================== */
 
 // ==========================================
@@ -15,10 +15,10 @@
  * 애플리케이션 설정 상수
  */
 const CONFIG = {
-    // Ping 테스트 관련 설정
-    PING_COUNT: 10,              // 총 Ping 요청 횟수
-    PING_INTERVAL: 1000,         // Ping 요청 간격 (ms)
-    PING_TIMEOUT: 5000,          // Ping 타임아웃 (ms)
+    // 상태 확인 관련 설정
+    PING_COUNT: 10,              // 총 요청 횟수
+    PING_INTERVAL: 1000,         // 요청 간격 (ms)
+    PING_TIMEOUT: 5000,          // 타임아웃 (ms)
     
     // 그래프 설정
     GRAPH_MAX_POINTS: 20,        // 그래프에 표시할 최대 데이터 포인트
@@ -32,7 +32,60 @@ const CONFIG = {
 };
 
 /**
- * Ping 테스트 결과를 저장하는 객체
+ * 한국어 메시지 상수
+ */
+const MESSAGES = {
+    // 상태 메시지
+    STATUS: {
+        STANDBY: '대기중',
+        TESTING: '확인중...',
+        ONLINE: '정상',
+        OFFLINE: '응답없음',
+        UNSTABLE: '불안정'
+    },
+    
+    // 상태 상세 메시지
+    STATUS_DETAIL: {
+        ENTER_IP: 'IP 주소를 입력해주세요',
+        PINGING: '서버 상태를 확인하는 중입니다',
+        REACHABLE: '서버가 정상적으로 응답합니다',
+        UNREACHABLE: '서버에서 응답이 없습니다',
+        PACKET_LOSS: '일부 패킷이 손실되었습니다'
+    },
+    
+    // 그래프 상태 메시지
+    GRAPH: {
+        WAITING: '대기 중...',
+        SCANNING: '스캔 중...',
+        CONNECTED: '연결됨',
+        UNSTABLE: '불안정',
+        UNREACHABLE: '연결 불가'
+    },
+    
+    // 토스트 메시지
+    TOAST: {
+        ENTER_IP: 'IP 주소를 입력해주세요',
+        INVALID_IP: '올바른 IP 주소 형식이 아닙니다',
+        TEST_RUNNING: '이미 상태 확인이 진행 중입니다',
+        SSH_LAUNCHING: 'SSH 클라이언트를 실행합니다',
+        SSH_ERROR: 'SSH 클라이언트 실행 실패. Xshell 설치 여부를 확인해주세요.',
+        HOST_SAVED: '호스트가 저장되었습니다',
+        HOST_EXISTS: '이미 저장된 호스트입니다',
+        HOST_DELETED: '호스트가 삭제되었습니다',
+        HOST_LOADED: '호스트 정보를 불러왔습니다',
+        TEST_COMPLETE_SUCCESS: '상태 확인 완료: 성공률',
+        TEST_COMPLETE_FAIL: '상태 확인 완료: 연결 실패'
+    },
+    
+    // 즐겨찾기 관련 메시지
+    QUICK_ACCESS: {
+        NO_HOSTS: '저장된 호스트가 없습니다',
+        DELETE_CONFIRM: '삭제하시겠습니까?'
+    }
+};
+
+/**
+ * 상태 확인 결과를 저장하는 객체
  */
 let pingResults = {
     data: [],           // 응답 시간 배열
@@ -73,11 +126,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    console.log('🚀 Network Control Center initialized');
+    console.log('🚀 네트워크 관제 센터 초기화 완료');
 });
 
 /**
- * 현재 시간 업데이트
+ * 현재 시간 업데이트 (한국어 형식)
  */
 function updateClock() {
     const now = new Date();
@@ -90,12 +143,12 @@ function updateClock() {
         second: '2-digit'
     });
     
-    // 날짜 표시 (YYYY.MM.DD)
+    // 날짜 표시 (YYYY년 MM월 DD일)
     const dateStr = now.toLocaleDateString('ko-KR', {
         year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-    }).replace(/\. /g, '.').replace('.', '');
+        month: 'long',
+        day: 'numeric'
+    });
     
     document.getElementById('current-time').textContent = timeStr;
     document.getElementById('current-date').textContent = dateStr;
@@ -121,13 +174,13 @@ function connectSSH() {
     
     // IP 주소 유효성 검사
     if (!ip) {
-        showToast('Please enter an IP address', 'error');
+        showToast(MESSAGES.TOAST.ENTER_IP, 'error');
         document.getElementById('ip-address').focus();
         return;
     }
     
     if (!isValidIP(ip)) {
-        showToast('Invalid IP address format', 'error');
+        showToast(MESSAGES.TOAST.INVALID_IP, 'error');
         document.getElementById('ip-address').focus();
         return;
     }
@@ -148,19 +201,19 @@ function connectSSH() {
         sshUri += `:${port}`;
     }
     
-    console.log(`🔗 Connecting via SSH: ${sshUri}`);
+    console.log(`🔗 SSH 연결 시도: ${sshUri}`);
     
     // SSH 프로토콜 핸들러 호출
     // 시스템에 SSH 핸들러(Xshell 등)가 등록되어 있어야 함
     try {
         window.location.href = sshUri;
-        showToast(`Launching SSH client for ${ip}`, 'success');
+        showToast(`${ip}에 ${MESSAGES.TOAST.SSH_LAUNCHING}`, 'success');
         
         // 연결 시도 기록
         updateTargetDisplay(ip, username, port);
     } catch (error) {
-        console.error('SSH connection error:', error);
-        showToast('Failed to launch SSH client. Please check if Xshell is installed.', 'error');
+        console.error('SSH 연결 오류:', error);
+        showToast(MESSAGES.TOAST.SSH_ERROR, 'error');
     }
 }
 
@@ -184,7 +237,7 @@ function isValidIP(ip) {
 // ==========================================
 
 /**
- * Ping 테스트 시작
+ * 상태 확인 시작
  * 
  * 브라우저 보안 정책으로 인해 실제 ICMP Ping은 불가능
  * 대신 HTTP fetch를 사용하여 연결 가능성 테스트
@@ -199,19 +252,19 @@ async function startPingTest() {
     
     // IP 주소 유효성 검사
     if (!ip) {
-        showToast('Please enter an IP address', 'error');
+        showToast(MESSAGES.TOAST.ENTER_IP, 'error');
         document.getElementById('ip-address').focus();
         return;
     }
     
     if (!isValidIP(ip)) {
-        showToast('Invalid IP address format', 'error');
+        showToast(MESSAGES.TOAST.INVALID_IP, 'error');
         return;
     }
     
     // 이미 테스트 중이면 중단
     if (pingResults.isRunning) {
-        showToast('Ping test is already running', 'warning');
+        showToast(MESSAGES.TOAST.TEST_RUNNING, 'warning');
         return;
     }
     
@@ -224,7 +277,7 @@ async function startPingTest() {
     };
     
     // UI 업데이트
-    setStatus('testing', 'TESTING...', `Pinging ${ip}`);
+    setStatus('testing', MESSAGES.STATUS.TESTING, MESSAGES.STATUS_DETAIL.PINGING);
     updateTargetDisplay(ip);
     hideGraphOverlay();
     
@@ -233,11 +286,11 @@ async function startPingTest() {
     pingBtn.classList.add('btn-loading');
     pingBtn.disabled = true;
     
-    document.getElementById('graph-status').textContent = 'SCANNING...';
+    document.getElementById('graph-status').textContent = MESSAGES.GRAPH.SCANNING;
     
-    console.log(`📡 Starting ping test for ${ip}`);
+    console.log(`📡 ${ip} 상태 확인 시작`);
     
-    // Ping 테스트 실행
+    // 상태 확인 실행
     for (let i = 0; i < CONFIG.PING_COUNT; i++) {
         if (!pingResults.isRunning) break;
         
@@ -271,24 +324,24 @@ async function startPingTest() {
     const successRate = (pingResults.successful / CONFIG.PING_COUNT) * 100;
     
     if (successRate >= 50) {
-        setStatus('online', 'ONLINE', `${ip} is reachable`);
-        document.getElementById('graph-status').textContent = 'CONNECTED';
+        setStatus('online', MESSAGES.STATUS.ONLINE, MESSAGES.STATUS_DETAIL.REACHABLE);
+        document.getElementById('graph-status').textContent = MESSAGES.GRAPH.CONNECTED;
     } else if (successRate > 0) {
-        setStatus('offline', 'UNSTABLE', `${ip} has packet loss`);
-        document.getElementById('graph-status').textContent = 'UNSTABLE';
+        setStatus('offline', MESSAGES.STATUS.UNSTABLE, MESSAGES.STATUS_DETAIL.PACKET_LOSS);
+        document.getElementById('graph-status').textContent = MESSAGES.GRAPH.UNSTABLE;
     } else {
-        setStatus('offline', 'OFFLINE', `${ip} is unreachable`);
-        document.getElementById('graph-status').textContent = 'UNREACHABLE';
+        setStatus('offline', MESSAGES.STATUS.OFFLINE, MESSAGES.STATUS_DETAIL.UNREACHABLE);
+        document.getElementById('graph-status').textContent = MESSAGES.GRAPH.UNREACHABLE;
     }
     
-    showToast(`Ping test completed: ${successRate.toFixed(0)}% success rate`, 
+    showToast(`${MESSAGES.TOAST.TEST_COMPLETE_SUCCESS} ${successRate.toFixed(0)}%`, 
               successRate >= 50 ? 'success' : 'error');
     
-    console.log(`✅ Ping test completed - Success: ${pingResults.successful}/${CONFIG.PING_COUNT}`);
+    console.log(`✅ 상태 확인 완료 - 성공: ${pingResults.successful}/${CONFIG.PING_COUNT}`);
 }
 
 /**
- * 단일 Ping 요청 수행
+ * 단일 요청 수행
  * 
  * HTTP fetch를 사용하여 연결 테스트
  * - 성공: 응답 시간 반환
@@ -650,12 +703,12 @@ function saveCurrentHost() {
     const username = document.getElementById('username').value.trim();
     
     if (!ip) {
-        showToast('Please enter an IP address first', 'warning');
+        showToast(MESSAGES.TOAST.ENTER_IP, 'warning');
         return;
     }
     
     if (!isValidIP(ip)) {
-        showToast('Invalid IP address format', 'error');
+        showToast(MESSAGES.TOAST.INVALID_IP, 'error');
         return;
     }
     
@@ -665,7 +718,7 @@ function saveCurrentHost() {
     // 중복 체크
     const exists = hosts.some(h => h.ip === ip && h.port === port);
     if (exists) {
-        showToast('This host is already saved', 'warning');
+        showToast(MESSAGES.TOAST.HOST_EXISTS, 'warning');
         return;
     }
     
@@ -683,7 +736,7 @@ function saveCurrentHost() {
     // UI 업데이트
     loadSavedHosts();
     
-    showToast(`Host ${ip} saved successfully`, 'success');
+    showToast(`${ip} ${MESSAGES.TOAST.HOST_SAVED}`, 'success');
 }
 
 /**
@@ -695,7 +748,7 @@ function getSavedHosts() {
         const data = localStorage.getItem(CONFIG.STORAGE_KEY);
         return data ? JSON.parse(data) : [];
     } catch (error) {
-        console.error('Error loading saved hosts:', error);
+        console.error('저장된 호스트 불러오기 오류:', error);
         return [];
     }
 }
@@ -711,7 +764,7 @@ function loadSavedHosts() {
         container.innerHTML = `
             <div class="text-center text-gray-600 text-sm py-4">
                 <div class="text-2xl mb-2 opacity-30">📌</div>
-                No saved hosts yet
+                ${MESSAGES.QUICK_ACCESS.NO_HOSTS}
             </div>
         `;
         return;
@@ -724,7 +777,7 @@ function loadSavedHosts() {
                 <div class="host-ip">${host.ip}${host.port !== '22' ? ':' + host.port : ''}</div>
                 ${host.username ? `<div class="host-user">${host.username}@</div>` : ''}
             </div>
-            <button class="delete-btn" onclick="event.stopPropagation(); deleteHost(${index})" title="Delete">
+            <button class="delete-btn" onclick="event.stopPropagation(); deleteHost(${index})" title="삭제">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
@@ -748,7 +801,7 @@ function loadHost(index) {
         
         updateTargetDisplay(host.ip, host.username, host.port);
         
-        showToast(`Loaded ${host.ip}`, 'info');
+        showToast(`${host.ip} ${MESSAGES.TOAST.HOST_LOADED}`, 'info');
     }
 }
 
@@ -760,11 +813,11 @@ function deleteHost(index) {
     const hosts = getSavedHosts();
     const host = hosts[index];
     
-    if (confirm(`Delete ${host.ip}?`)) {
+    if (confirm(`${host.ip}을(를) ${MESSAGES.QUICK_ACCESS.DELETE_CONFIRM}`)) {
         hosts.splice(index, 1);
         localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(hosts));
         loadSavedHosts();
-        showToast('Host deleted', 'info');
+        showToast(MESSAGES.TOAST.HOST_DELETED, 'info');
     }
 }
 
@@ -834,10 +887,10 @@ function formatDateTime(date) {
  * 디버그 정보 콘솔 출력
  */
 function debugInfo() {
-    console.group('🔧 Network Control Center Debug Info');
-    console.log('Ping Results:', pingResults);
-    console.log('Saved Hosts:', getSavedHosts());
-    console.log('Config:', CONFIG);
+    console.group('🔧 네트워크 관제 센터 디버그 정보');
+    console.log('상태 확인 결과:', pingResults);
+    console.log('저장된 호스트:', getSavedHosts());
+    console.log('설정값:', CONFIG);
     console.groupEnd();
 }
 
