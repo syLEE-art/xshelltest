@@ -19,7 +19,7 @@
  */
 const SECURITY = {
     // "이소영"의 SHA-256 해시값
-    PASSWORD_HASH: 'b98d714f58002f37922c2ea36b4b11aff13f14f60df514bfb9d4ed7a69f94103',
+    PASSWORD_HASH: 'db97cb66bad0d531ab03b5e39d9626fc8d85015615a082a00bb526486a3e49cf',
     
     // AES-256으로 암호화된 초기 서버 데이터 (비밀번호: "이소영")
     // 이 데이터는 올바른 비밀번호 없이는 복호화할 수 없습니다.
