@@ -1,0 +1,619 @@
+/* ==========================================
+   Network Control Center - Custom Styles
+   ==========================================
+   - 네트워크 관제 센터 테마의 다크 모드 스타일
+   - Tailwind CSS와 함께 사용
+   ========================================== */
+
+/* ==========================================
+   CSS Custom Properties (Variables)
+   - 전역 색상 및 스타일 변수 정의
+   ========================================== */
+:root {
+    /* 네온 컬러 팔레트 */
+    --neon-cyan: #00f5ff;
+    --neon-green: #00ff88;
+    --neon-red: #ff0055;
+    --neon-orange: #ff8800;
+    --neon-purple: #bf00ff;
+    
+    /* 다크 테마 컬러 */
+    --dark-900: #0a0a0f;
+    --dark-800: #12121a;
+    --dark-700: #1a1a25;
+    --dark-600: #252530;
+    --dark-500: #35354a;
+    
+    /* 그림자 효과 */
+    --glow-cyan: 0 0 20px rgba(0, 245, 255, 0.3);
+    --glow-green: 0 0 20px rgba(0, 255, 136, 0.3);
+    --glow-red: 0 0 20px rgba(255, 0, 85, 0.3);
+}
+
+/* ==========================================
+   Global Styles
+   ========================================== */
+
+/* 스크롤바 커스터마이징 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--dark-800);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--dark-500);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--dark-600);
+}
+
+/* 텍스트 선택 스타일 */
+::selection {
+    background: rgba(0, 245, 255, 0.3);
+    color: #fff;
+}
+
+/* ==========================================
+   Background Effects
+   - 그리드 패턴 및 그라데이션 배경
+   ========================================== */
+
+/* 그리드 패턴 배경 */
+.bg-grid-pattern {
+    background-image: 
+        linear-gradient(rgba(0, 245, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 245, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+}
+
+/* 방사형 그라데이션 */
+.bg-gradient-radial {
+    background: radial-gradient(ellipse at center, var(--tw-gradient-from) 0%, var(--tw-gradient-via) 50%, var(--tw-gradient-to) 100%);
+}
+
+/* 그래프 내부 그리드 라인 */
+.grid-lines {
+    background-image: 
+        linear-gradient(rgba(53, 53, 74, 0.5) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(53, 53, 74, 0.5) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+/* ==========================================
+   Card Components
+   - 메인 카드 컨테이너 스타일
+   ========================================== */
+
+.card-container {
+    background: linear-gradient(135deg, var(--dark-800) 0%, var(--dark-700) 100%);
+    border: 1px solid var(--dark-500);
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    /* 미세한 글로우 효과 */
+    box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.3),
+        0 2px 4px -1px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* 카드 상단 스캔라인 효과 */
+.card-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+    opacity: 0.5;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid var(--dark-500);
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* ==========================================
+   Input Components
+   - 입력 필드 스타일
+   ========================================== */
+
+.input-group {
+    position: relative;
+}
+
+.input-label {
+    display: block;
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.input-field {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: var(--dark-800);
+    border: 1px solid var(--dark-500);
+    border-radius: 8px;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.input-field::placeholder {
+    color: #4b5563;
+}
+
+.input-field:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: var(--glow-cyan), inset 0 0 20px rgba(0, 245, 255, 0.05);
+}
+
+/* 입력 필드 검증 스타일 */
+.input-field:valid:not(:placeholder-shown) {
+    border-color: var(--neon-green);
+}
+
+.input-field:invalid:not(:placeholder-shown):not(:focus) {
+    border-color: var(--neon-red);
+}
+
+/* 하단 언더라인 애니메이션 */
+.input-underline {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: var(--neon-cyan);
+    transition: all 0.3s ease;
+    transform: translateX(-50%);
+}
+
+.input-field:focus + .input-underline {
+    width: 100%;
+}
+
+/* ==========================================
+   Button Components
+   - 버튼 스타일
+   ========================================== */
+
+/* 기본 버튼 스타일 */
+.btn-primary,
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1rem 2rem;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Primary Button (Connect) */
+.btn-primary {
+    background: linear-gradient(135deg, var(--neon-cyan), #00b8c4);
+    color: var(--dark-900);
+    border: none;
+    box-shadow: var(--glow-cyan);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 30px rgba(0, 245, 255, 0.5);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Secondary Button (Ping Test) */
+.btn-secondary {
+    background: transparent;
+    color: var(--neon-orange);
+    border: 2px solid var(--neon-orange);
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 136, 0, 0.1);
+    box-shadow: 0 0 20px rgba(255, 136, 0, 0.3);
+    transform: translateY(-2px);
+}
+
+.btn-secondary:active {
+    transform: translateY(0);
+}
+
+/* 버튼 로딩 상태 */
+.btn-loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* ==========================================
+   Status LED Indicator
+   - 상태 표시 LED 스타일
+   ========================================== */
+
+.status-led {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all 0.5s ease;
+}
+
+.status-led-inner {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    transition: all 0.5s ease;
+}
+
+/* 대기 상태 (회색) */
+.status-unknown {
+    background: linear-gradient(135deg, #374151, #1f2937);
+    box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.status-unknown .status-led-inner {
+    background: linear-gradient(135deg, #4b5563, #374151);
+    box-shadow: 0 0 10px rgba(75, 85, 99, 0.3);
+}
+
+/* 온라인 상태 (녹색) */
+.status-online {
+    background: linear-gradient(135deg, #065f46, #064e3b);
+    box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3);
+    animation: pulse-glow-green 2s ease-in-out infinite;
+}
+
+.status-online .status-led-inner {
+    background: linear-gradient(135deg, var(--neon-green), #00cc6a);
+    box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+}
+
+/* 오프라인 상태 (빨강) */
+.status-offline {
+    background: linear-gradient(135deg, #7f1d1d, #5c1515);
+    box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3);
+    animation: pulse-glow-red 2s ease-in-out infinite;
+}
+
+.status-offline .status-led-inner {
+    background: linear-gradient(135deg, var(--neon-red), #cc0044);
+    box-shadow: 0 0 30px rgba(255, 0, 85, 0.5);
+}
+
+/* 테스트 중 상태 (주황) */
+.status-testing {
+    background: linear-gradient(135deg, #78350f, #5c2d0f);
+    box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.status-testing .status-led-inner {
+    background: linear-gradient(135deg, var(--neon-orange), #cc6600);
+    box-shadow: 0 0 30px rgba(255, 136, 0, 0.5);
+    animation: blink 0.5s ease-in-out infinite;
+}
+
+/* 상태 링 애니메이션 */
+.status-ring {
+    position: absolute;
+    inset: -10px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    opacity: 0;
+    transition: all 0.5s ease;
+}
+
+.status-online + .status-ring {
+    border-color: var(--neon-green);
+    opacity: 0.3;
+    animation: ring-pulse 2s ease-out infinite;
+}
+
+.status-offline + .status-ring {
+    border-color: var(--neon-red);
+    opacity: 0.3;
+    animation: ring-pulse 2s ease-out infinite;
+}
+
+/* ==========================================
+   Statistics Row
+   - 통계 정보 행 스타일
+   ========================================== */
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--dark-800);
+    border-radius: 6px;
+    border: 1px solid var(--dark-600);
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.875rem;
+    color: #fff;
+}
+
+/* ==========================================
+   Quick Access Items
+   - 빠른 접속 항목 스타일
+   ========================================== */
+
+.quick-access-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--dark-800);
+    border: 1px solid var(--dark-600);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.quick-access-item:hover {
+    border-color: var(--neon-cyan);
+    background: rgba(0, 245, 255, 0.05);
+}
+
+.quick-access-item .host-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dark-500);
+}
+
+.quick-access-item .host-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.quick-access-item .host-ip {
+    font-size: 0.875rem;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.quick-access-item .host-user {
+    font-size: 0.625rem;
+    color: #6b7280;
+}
+
+.quick-access-item .delete-btn {
+    opacity: 0;
+    padding: 0.25rem;
+    color: #6b7280;
+    transition: all 0.2s ease;
+}
+
+.quick-access-item:hover .delete-btn {
+    opacity: 1;
+}
+
+.quick-access-item .delete-btn:hover {
+    color: var(--neon-red);
+}
+
+/* ==========================================
+   Toast Notifications
+   - 토스트 알림 스타일
+   ========================================== */
+
+.toast {
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    animation: slide-in 0.3s ease-out;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.toast-success {
+    background: linear-gradient(135deg, #065f46, #064e3b);
+    border: 1px solid var(--neon-green);
+    color: var(--neon-green);
+}
+
+.toast-error {
+    background: linear-gradient(135deg, #7f1d1d, #5c1515);
+    border: 1px solid var(--neon-red);
+    color: var(--neon-red);
+}
+
+.toast-info {
+    background: linear-gradient(135deg, #0c4a6e, #0a3a5c);
+    border: 1px solid var(--neon-cyan);
+    color: var(--neon-cyan);
+}
+
+.toast-warning {
+    background: linear-gradient(135deg, #78350f, #5c2d0f);
+    border: 1px solid var(--neon-orange);
+    color: var(--neon-orange);
+}
+
+/* ==========================================
+   Animations
+   - 애니메이션 키프레임
+   ========================================== */
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes pulse-glow-green {
+    0%, 100% { box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3), 0 0 20px rgba(0, 255, 136, 0.2); }
+    50% { box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3), 0 0 40px rgba(0, 255, 136, 0.4); }
+}
+
+@keyframes pulse-glow-red {
+    0%, 100% { box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 0, 85, 0.2); }
+    50% { box-shadow: inset 0 -5px 15px rgba(0, 0, 0, 0.3), 0 0 40px rgba(255, 0, 85, 0.4); }
+}
+
+@keyframes ring-pulse {
+    0% { transform: scale(1); opacity: 0.3; }
+    100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes slide-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes scan {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+}
+
+/* ==========================================
+   Responsive Design
+   - 반응형 스타일
+   ========================================== */
+
+/* 태블릿 (768px 이하) */
+@media (max-width: 768px) {
+    .card-header {
+        padding: 0.875rem 1rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .btn-primary,
+    .btn-secondary {
+        padding: 0.875rem 1.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .status-led {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .status-led-inner {
+        width: 35px;
+        height: 35px;
+    }
+}
+
+/* 모바일 (480px 이하) */
+@media (max-width: 480px) {
+    .input-field {
+        padding: 0.75rem;
+        font-size: 0.875rem;
+    }
+    
+    .btn-primary,
+    .btn-secondary {
+        padding: 0.75rem 1rem;
+        width: 100%;
+    }
+    
+    .stat-row {
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .stat-label,
+    .stat-value {
+        font-size: 0.75rem;
+    }
+}
+
+/* ==========================================
+   Utility Classes
+   - 유틸리티 클래스
+   ========================================== */
+
+/* 텍스트 글로우 효과 */
+.text-glow-cyan {
+    text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+.text-glow-green {
+    text-shadow: 0 0 10px var(--neon-green);
+}
+
+.text-glow-red {
+    text-shadow: 0 0 10px var(--neon-red);
+}
+
+/* 숨김 처리 */
+.hidden {
+    display: none !important;
+}
+
+/* 비활성화 상태 */
+.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
