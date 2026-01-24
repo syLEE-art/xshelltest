@@ -1,33 +1,23 @@
 /* ==========================================
-   네트워크 관제 센터 - JavaScript (한국어 버전)
+   네트워크 관제 센터 - JavaScript (v2.0)
    ==========================================
    - 원격 접속 (SSH Protocol Handler)
    - 상태 확인 (HTTP Fetch 기반)
    - 응답 시간 그래프 시각화
-   - 즐겨찾기 저장 기능
+   - 폴더(그룹) 기반 서버 관리 기능
    ========================================== */
 
 // ==========================================
 // Global Variables & Configuration
 // ==========================================
 
-/**
- * 애플리케이션 설정 상수
- */
 const CONFIG = {
-    // 상태 확인 관련 설정
-    PING_COUNT: 10,              // 총 요청 횟수
-    PING_INTERVAL: 1000,         // 요청 간격 (ms)
-    PING_TIMEOUT: 5000,          // 타임아웃 (ms)
-    
-    // 그래프 설정
-    GRAPH_MAX_POINTS: 20,        // 그래프에 표시할 최대 데이터 포인트
-    GRAPH_MAX_MS: 500,           // Y축 최대값 (ms)
-    
-    // 로컬 스토리지 키
-    STORAGE_KEY: 'network_control_hosts',
-    
-    // 기본 SSH 포트
+    PING_COUNT: 10,
+    PING_INTERVAL: 1000,
+    PING_TIMEOUT: 5000,
+    GRAPH_MAX_POINTS: 20,
+    GRAPH_MAX_MS: 500,
+    STORAGE_KEY: 'network_control_server_groups',
     DEFAULT_SSH_PORT: 22
 };
 
@@ -35,7 +25,6 @@ const CONFIG = {
  * 한국어 메시지 상수
  */
 const MESSAGES = {
-    // 상태 메시지
     STATUS: {
         STANDBY: '대기중',
         TESTING: '확인중...',
@@ -43,8 +32,6 @@ const MESSAGES = {
         OFFLINE: '응답없음',
         UNSTABLE: '불안정'
     },
-    
-    // 상태 상세 메시지
     STATUS_DETAIL: {
         ENTER_IP: 'IP 주소를 입력해주세요',
         PINGING: '서버 상태를 확인하는 중입니다',
@@ -52,8 +39,6 @@ const MESSAGES = {
         UNREACHABLE: '서버에서 응답이 없습니다',
         PACKET_LOSS: '일부 패킷이 손실되었습니다'
     },
-    
-    // 그래프 상태 메시지
     GRAPH: {
         WAITING: '대기 중...',
         SCANNING: '스캔 중...',
@@ -61,37 +46,35 @@ const MESSAGES = {
         UNSTABLE: '불안정',
         UNREACHABLE: '연결 불가'
     },
-    
-    // 토스트 메시지
     TOAST: {
         ENTER_IP: 'IP 주소를 입력해주세요',
         INVALID_IP: '올바른 IP 주소 형식이 아닙니다',
         TEST_RUNNING: '이미 상태 확인이 진행 중입니다',
         SSH_LAUNCHING: 'SSH 클라이언트를 실행합니다',
         SSH_ERROR: 'SSH 클라이언트 실행 실패. Xshell 설치 여부를 확인해주세요.',
-        HOST_SAVED: '호스트가 저장되었습니다',
-        HOST_EXISTS: '이미 저장된 호스트입니다',
-        HOST_DELETED: '호스트가 삭제되었습니다',
-        HOST_LOADED: '호스트 정보를 불러왔습니다',
-        TEST_COMPLETE_SUCCESS: '상태 확인 완료: 성공률',
-        TEST_COMPLETE_FAIL: '상태 확인 완료: 연결 실패'
-    },
-    
-    // 즐겨찾기 관련 메시지
-    QUICK_ACCESS: {
-        NO_HOSTS: '저장된 호스트가 없습니다',
-        DELETE_CONFIRM: '삭제하시겠습니까?'
+        FOLDER_CREATED: '폴더가 생성되었습니다',
+        FOLDER_EXISTS: '이미 존재하는 폴더 이름입니다',
+        FOLDER_DELETED: '폴더가 삭제되었습니다',
+        FOLDER_UPDATED: '폴더 이름이 변경되었습니다',
+        FOLDER_EMPTY_NAME: '폴더 이름을 입력해주세요',
+        SERVER_ADDED: '서버가 추가되었습니다',
+        SERVER_DELETED: '서버가 삭제되었습니다',
+        SERVER_EXISTS: '이미 등록된 서버입니다',
+        SELECT_FOLDER: '폴더를 선택해주세요',
+        ENTER_SERVER_NAME: '서버 이름을 입력해주세요',
+        GROUP_PING_START: '폴더 내 전체 서버 상태 확인 시작',
+        GROUP_PING_COMPLETE: '전체 상태 확인 완료'
     }
 };
 
 /**
- * 상태 확인 결과를 저장하는 객체
+ * 상태 확인 결과 저장
  */
 let pingResults = {
-    data: [],           // 응답 시간 배열
-    successful: 0,      // 성공 횟수
-    failed: 0,          // 실패 횟수
-    isRunning: false    // 테스트 진행 중 여부
+    data: [],
+    successful: 0,
+    failed: 0,
+    isRunning: false
 };
 
 /**
@@ -99,80 +82,659 @@ let pingResults = {
  */
 let graphCtx = null;
 
+/**
+ * 현재 펼쳐진 폴더 상태 저장
+ */
+let expandedFolders = new Set();
+
 // ==========================================
 // Initialization
 // ==========================================
 
-/**
- * 페이지 로드 시 초기화
- */
 document.addEventListener('DOMContentLoaded', () => {
-    // 시간 표시 시작
     updateClock();
     setInterval(updateClock, 1000);
-    
-    // 그래프 캔버스 초기화
     initGraph();
+    loadServerGroups();
     
-    // 저장된 호스트 목록 로드
-    loadSavedHosts();
-    
-    // IP 입력 필드 이벤트 리스너
     const ipInput = document.getElementById('ip-address');
     ipInput.addEventListener('input', handleIPInput);
     ipInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            startPingTest();
-        }
+        if (e.key === 'Enter') startPingTest();
     });
     
-    console.log('🚀 네트워크 관제 센터 초기화 완료');
+    // 모달 외부 클릭 시 닫기
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
+            }
+        });
+    });
+    
+    console.log('🚀 네트워크 관제 센터 v2.0 초기화 완료');
 });
 
-/**
- * 현재 시간 업데이트 (한국어 형식)
- */
 function updateClock() {
     const now = new Date();
-    
-    // 시간 표시 (HH:MM:SS)
     const timeStr = now.toLocaleTimeString('ko-KR', { 
-        hour12: false,
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
-    
-    // 날짜 표시 (YYYY년 MM월 DD일)
     const dateStr = now.toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
+        year: 'numeric', month: 'long', day: 'numeric'
     });
-    
     document.getElementById('current-time').textContent = timeStr;
     document.getElementById('current-date').textContent = dateStr;
+}
+
+// ==========================================
+// Server Groups Data Management
+// ==========================================
+
+/**
+ * 서버 그룹 데이터 구조
+ * {
+ *   "폴더명1": [
+ *     { name: "서버1", ip: "1.1.1.1", port: "22", username: "root", status: "unknown" },
+ *     ...
+ *   ],
+ *   "폴더명2": [...],
+ *   ...
+ * }
+ */
+
+/**
+ * 로컬 스토리지에서 서버 그룹 불러오기
+ */
+function getServerGroups() {
+    try {
+        const data = localStorage.getItem(CONFIG.STORAGE_KEY);
+        return data ? JSON.parse(data) : {};
+    } catch (error) {
+        console.error('서버 그룹 불러오기 오류:', error);
+        return {};
+    }
+}
+
+/**
+ * 로컬 스토리지에 서버 그룹 저장
+ */
+function saveServerGroups(groups) {
+    try {
+        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(groups));
+    } catch (error) {
+        console.error('서버 그룹 저장 오류:', error);
+        showToast('데이터 저장 중 오류가 발생했습니다', 'error');
+    }
+}
+
+/**
+ * 서버 그룹 UI 렌더링
+ */
+function loadServerGroups() {
+    const container = document.getElementById('server-groups-container');
+    const groups = getServerGroups();
+    const folderNames = Object.keys(groups);
+    
+    if (folderNames.length === 0) {
+        container.innerHTML = `
+            <div class="text-center text-gray-600 text-sm py-8">
+                <div class="text-4xl mb-2 opacity-30">📁</div>
+                <p>저장된 서버가 없습니다</p>
+                <p class="text-xs mt-1">새 폴더를 만들고 서버를 추가해보세요</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = folderNames.map(folderName => {
+        const servers = groups[folderName];
+        const isExpanded = expandedFolders.has(folderName);
+        const serverCount = servers.length;
+        const onlineCount = servers.filter(s => s.status === 'online').length;
+        
+        return `
+            <div class="folder-accordion" data-folder="${escapeHtml(folderName)}">
+                <!-- 폴더 헤더 -->
+                <div class="folder-header ${isExpanded ? 'expanded' : ''}" onclick="toggleFolder('${escapeHtml(folderName)}')">
+                    <div class="flex items-center gap-3">
+                        <span class="folder-icon">${isExpanded ? '📂' : '📁'}</span>
+                        <span class="folder-name font-medium">${escapeHtml(folderName)}</span>
+                        <span class="folder-count text-xs text-gray-500">(${serverCount}대)</span>
+                        ${serverCount > 0 ? `
+                            <span class="folder-status text-xs ${onlineCount === serverCount ? 'text-neon-green' : onlineCount > 0 ? 'text-neon-orange' : 'text-gray-500'}">
+                                ${onlineCount}/${serverCount} 정상
+                            </span>
+                        ` : ''}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <!-- 폴더 전체 상태 확인 버튼 -->
+                        <button 
+                            onclick="event.stopPropagation(); pingFolderServers('${escapeHtml(folderName)}')"
+                            class="folder-action-btn text-neon-orange hover:bg-neon-orange/10"
+                            title="전체 상태 확인"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                        </button>
+                        <!-- 폴더 이름 수정 버튼 -->
+                        <button 
+                            onclick="event.stopPropagation(); openEditFolderModal('${escapeHtml(folderName)}')"
+                            class="folder-action-btn text-neon-cyan hover:bg-neon-cyan/10"
+                            title="폴더 이름 수정"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                        </button>
+                        <!-- 폴더 삭제 버튼 -->
+                        <button 
+                            onclick="event.stopPropagation(); deleteFolder('${escapeHtml(folderName)}')"
+                            class="folder-action-btn text-neon-red hover:bg-neon-red/10"
+                            title="폴더 삭제"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                        <!-- 펼침/접힘 아이콘 -->
+                        <svg class="w-5 h-5 text-gray-500 transform transition-transform ${isExpanded ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </div>
+                </div>
+                
+                <!-- 서버 목록 (아코디언 내용) -->
+                <div class="folder-content ${isExpanded ? 'expanded' : ''}">
+                    ${servers.length === 0 ? `
+                        <div class="text-center text-gray-600 text-sm py-4">
+                            이 폴더에 서버가 없습니다
+                        </div>
+                    ` : `
+                        <div class="server-list">
+                            ${servers.map((server, index) => `
+                                <div class="server-item" data-server-index="${index}">
+                                    <div class="server-status-indicator ${server.status || 'unknown'}"></div>
+                                    <div class="server-info">
+                                        <div class="server-name">${escapeHtml(server.name)}</div>
+                                        <div class="server-ip font-mono text-xs text-gray-500">
+                                            ${server.username ? escapeHtml(server.username) + '@' : ''}${escapeHtml(server.ip)}${server.port && server.port !== '22' ? ':' + escapeHtml(server.port) : ''}
+                                        </div>
+                                    </div>
+                                    <div class="server-actions">
+                                        <!-- 서버 선택 (입력창에 불러오기) -->
+                                        <button 
+                                            onclick="loadServerToInput('${escapeHtml(folderName)}', ${index})"
+                                            class="server-action-btn text-neon-cyan"
+                                            title="선택"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                            </svg>
+                                        </button>
+                                        <!-- 빠른 접속 -->
+                                        <button 
+                                            onclick="quickConnect('${escapeHtml(folderName)}', ${index})"
+                                            class="server-action-btn text-neon-green"
+                                            title="빠른 접속"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                            </svg>
+                                        </button>
+                                        <!-- 서버 삭제 -->
+                                        <button 
+                                            onclick="deleteServer('${escapeHtml(folderName)}', ${index})"
+                                            class="server-action-btn text-neon-red"
+                                            title="삭제"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    // 서버 추가 모달의 폴더 선택 옵션 업데이트
+    updateFolderSelect();
+}
+
+/**
+ * HTML 이스케이프 처리
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * 폴더 선택 드롭다운 업데이트
+ */
+function updateFolderSelect() {
+    const select = document.getElementById('server-folder-select');
+    if (!select) return;
+    
+    const groups = getServerGroups();
+    const folderNames = Object.keys(groups);
+    
+    select.innerHTML = `
+        <option value="">폴더를 선택하세요</option>
+        ${folderNames.map(name => `
+            <option value="${escapeHtml(name)}">${escapeHtml(name)}</option>
+        `).join('')}
+    `;
+}
+
+// ==========================================
+// Folder Management Functions
+// ==========================================
+
+/**
+ * 폴더 토글 (아코디언)
+ */
+function toggleFolder(folderName) {
+    if (expandedFolders.has(folderName)) {
+        expandedFolders.delete(folderName);
+    } else {
+        expandedFolders.add(folderName);
+    }
+    loadServerGroups();
+}
+
+/**
+ * 새 폴더 생성 모달 열기
+ */
+function openFolderModal() {
+    document.getElementById('new-folder-name').value = '';
+    document.getElementById('folder-modal').classList.remove('hidden');
+    document.getElementById('new-folder-name').focus();
+}
+
+/**
+ * 새 폴더 생성 모달 닫기
+ */
+function closeFolderModal() {
+    document.getElementById('folder-modal').classList.add('hidden');
+}
+
+/**
+ * 새 폴더 생성
+ */
+function createFolder() {
+    const nameInput = document.getElementById('new-folder-name');
+    const folderName = nameInput.value.trim();
+    
+    if (!folderName) {
+        showToast(MESSAGES.TOAST.FOLDER_EMPTY_NAME, 'warning');
+        nameInput.focus();
+        return;
+    }
+    
+    const groups = getServerGroups();
+    
+    if (groups[folderName]) {
+        showToast(MESSAGES.TOAST.FOLDER_EXISTS, 'warning');
+        return;
+    }
+    
+    groups[folderName] = [];
+    saveServerGroups(groups);
+    
+    expandedFolders.add(folderName);
+    loadServerGroups();
+    closeFolderModal();
+    
+    showToast(`"${folderName}" ${MESSAGES.TOAST.FOLDER_CREATED}`, 'success');
+}
+
+/**
+ * 폴더 이름 수정 모달 열기
+ */
+function openEditFolderModal(folderName) {
+    document.getElementById('edit-folder-old-name').value = folderName;
+    document.getElementById('edit-folder-new-name').value = folderName;
+    document.getElementById('edit-folder-modal').classList.remove('hidden');
+    document.getElementById('edit-folder-new-name').focus();
+    document.getElementById('edit-folder-new-name').select();
+}
+
+/**
+ * 폴더 이름 수정 모달 닫기
+ */
+function closeEditFolderModal() {
+    document.getElementById('edit-folder-modal').classList.add('hidden');
+}
+
+/**
+ * 폴더 이름 업데이트
+ */
+function updateFolderName() {
+    const oldName = document.getElementById('edit-folder-old-name').value;
+    const newName = document.getElementById('edit-folder-new-name').value.trim();
+    
+    if (!newName) {
+        showToast(MESSAGES.TOAST.FOLDER_EMPTY_NAME, 'warning');
+        return;
+    }
+    
+    if (oldName === newName) {
+        closeEditFolderModal();
+        return;
+    }
+    
+    const groups = getServerGroups();
+    
+    if (groups[newName]) {
+        showToast(MESSAGES.TOAST.FOLDER_EXISTS, 'warning');
+        return;
+    }
+    
+    // 폴더 이름 변경
+    groups[newName] = groups[oldName];
+    delete groups[oldName];
+    
+    // 펼침 상태도 업데이트
+    if (expandedFolders.has(oldName)) {
+        expandedFolders.delete(oldName);
+        expandedFolders.add(newName);
+    }
+    
+    saveServerGroups(groups);
+    loadServerGroups();
+    closeEditFolderModal();
+    
+    showToast(MESSAGES.TOAST.FOLDER_UPDATED, 'success');
+}
+
+/**
+ * 폴더 삭제
+ */
+function deleteFolder(folderName) {
+    const groups = getServerGroups();
+    const serverCount = groups[folderName]?.length || 0;
+    
+    const message = serverCount > 0 
+        ? `"${folderName}" 폴더와 포함된 ${serverCount}개의 서버를 모두 삭제하시겠습니까?`
+        : `"${folderName}" 폴더를 삭제하시겠습니까?`;
+    
+    if (!confirm(message)) return;
+    
+    delete groups[folderName];
+    expandedFolders.delete(folderName);
+    
+    saveServerGroups(groups);
+    loadServerGroups();
+    
+    showToast(MESSAGES.TOAST.FOLDER_DELETED, 'info');
+}
+
+// ==========================================
+// Server Management Functions
+// ==========================================
+
+/**
+ * 서버 추가 모달 열기
+ */
+function openServerModal() {
+    const groups = getServerGroups();
+    if (Object.keys(groups).length === 0) {
+        showToast('먼저 폴더를 생성해주세요', 'warning');
+        openFolderModal();
+        return;
+    }
+    
+    // 입력 필드 초기화
+    document.getElementById('server-folder-select').value = '';
+    document.getElementById('new-server-name').value = '';
+    document.getElementById('new-server-ip').value = '';
+    document.getElementById('new-server-port').value = '';
+    document.getElementById('new-server-user').value = '';
+    
+    // 현재 입력창의 값 가져오기
+    const currentIP = document.getElementById('ip-address').value.trim();
+    const currentPort = document.getElementById('port').value.trim();
+    const currentUser = document.getElementById('username').value.trim();
+    
+    if (currentIP) {
+        document.getElementById('new-server-ip').value = currentIP;
+    }
+    if (currentPort) {
+        document.getElementById('new-server-port').value = currentPort;
+    }
+    if (currentUser) {
+        document.getElementById('new-server-user').value = currentUser;
+    }
+    
+    document.getElementById('server-modal').classList.remove('hidden');
+    document.getElementById('server-folder-select').focus();
+}
+
+/**
+ * 서버 추가 모달 닫기
+ */
+function closeServerModal() {
+    document.getElementById('server-modal').classList.add('hidden');
+}
+
+/**
+ * 폴더에 서버 추가
+ */
+function addServerToFolder() {
+    const folderName = document.getElementById('server-folder-select').value;
+    const serverName = document.getElementById('new-server-name').value.trim();
+    const serverIP = document.getElementById('new-server-ip').value.trim();
+    const serverPort = document.getElementById('new-server-port').value.trim() || '22';
+    const serverUser = document.getElementById('new-server-user').value.trim();
+    
+    // 유효성 검사
+    if (!folderName) {
+        showToast(MESSAGES.TOAST.SELECT_FOLDER, 'warning');
+        return;
+    }
+    if (!serverName) {
+        showToast(MESSAGES.TOAST.ENTER_SERVER_NAME, 'warning');
+        document.getElementById('new-server-name').focus();
+        return;
+    }
+    if (!serverIP) {
+        showToast(MESSAGES.TOAST.ENTER_IP, 'warning');
+        document.getElementById('new-server-ip').focus();
+        return;
+    }
+    if (!isValidIP(serverIP)) {
+        showToast(MESSAGES.TOAST.INVALID_IP, 'warning');
+        document.getElementById('new-server-ip').focus();
+        return;
+    }
+    
+    const groups = getServerGroups();
+    
+    // 중복 체크
+    const exists = groups[folderName].some(s => s.ip === serverIP && s.port === serverPort);
+    if (exists) {
+        showToast(MESSAGES.TOAST.SERVER_EXISTS, 'warning');
+        return;
+    }
+    
+    // 서버 추가
+    groups[folderName].push({
+        name: serverName,
+        ip: serverIP,
+        port: serverPort,
+        username: serverUser,
+        status: 'unknown',
+        addedAt: new Date().toISOString()
+    });
+    
+    saveServerGroups(groups);
+    expandedFolders.add(folderName);
+    loadServerGroups();
+    closeServerModal();
+    
+    showToast(`"${serverName}" ${MESSAGES.TOAST.SERVER_ADDED}`, 'success');
+}
+
+/**
+ * 서버 삭제
+ */
+function deleteServer(folderName, serverIndex) {
+    const groups = getServerGroups();
+    const server = groups[folderName][serverIndex];
+    
+    if (!confirm(`"${server.name}" 서버를 삭제하시겠습니까?`)) return;
+    
+    groups[folderName].splice(serverIndex, 1);
+    saveServerGroups(groups);
+    loadServerGroups();
+    
+    showToast(MESSAGES.TOAST.SERVER_DELETED, 'info');
+}
+
+/**
+ * 서버 정보를 입력창에 불러오기
+ */
+function loadServerToInput(folderName, serverIndex) {
+    const groups = getServerGroups();
+    const server = groups[folderName][serverIndex];
+    
+    document.getElementById('ip-address').value = server.ip;
+    document.getElementById('port').value = server.port || '';
+    document.getElementById('username').value = server.username || '';
+    
+    updateTargetDisplay(server.ip, server.username, server.port);
+    
+    showToast(`${server.name} 정보를 불러왔습니다`, 'info');
+    
+    // 스크롤을 상단으로
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+/**
+ * 빠른 SSH 접속
+ */
+function quickConnect(folderName, serverIndex) {
+    const groups = getServerGroups();
+    const server = groups[folderName][serverIndex];
+    
+    // SSH URI 구성
+    let sshUri = 'ssh://';
+    if (server.username) {
+        sshUri += `${encodeURIComponent(server.username)}@`;
+    }
+    sshUri += server.ip;
+    if (server.port && server.port !== '22') {
+        sshUri += `:${server.port}`;
+    }
+    
+    try {
+        window.location.href = sshUri;
+        showToast(`${server.name}에 ${MESSAGES.TOAST.SSH_LAUNCHING}`, 'success');
+    } catch (error) {
+        console.error('SSH 연결 오류:', error);
+        showToast(MESSAGES.TOAST.SSH_ERROR, 'error');
+    }
+}
+
+// ==========================================
+// Folder Ping Functions
+// ==========================================
+
+/**
+ * 폴더 내 전체 서버 상태 확인
+ */
+async function pingFolderServers(folderName) {
+    const groups = getServerGroups();
+    const servers = groups[folderName];
+    
+    if (!servers || servers.length === 0) {
+        showToast('확인할 서버가 없습니다', 'warning');
+        return;
+    }
+    
+    showToast(`${MESSAGES.TOAST.GROUP_PING_START} (${servers.length}대)`, 'info');
+    
+    // 모든 서버 상태를 'testing'으로 변경
+    servers.forEach(server => server.status = 'testing');
+    saveServerGroups(groups);
+    loadServerGroups();
+    
+    // 각 서버에 대해 Ping 테스트
+    for (let i = 0; i < servers.length; i++) {
+        const server = servers[i];
+        const result = await performQuickPing(server.ip);
+        
+        server.status = result.success ? 'online' : 'offline';
+        server.lastChecked = new Date().toISOString();
+        server.responseTime = result.time;
+        
+        // 실시간 업데이트
+        saveServerGroups(groups);
+        loadServerGroups();
+    }
+    
+    // 결과 요약
+    const onlineCount = servers.filter(s => s.status === 'online').length;
+    showToast(`${MESSAGES.TOAST.GROUP_PING_COMPLETE}: ${onlineCount}/${servers.length} 정상`, 
+              onlineCount === servers.length ? 'success' : 'warning');
+}
+
+/**
+ * 빠른 Ping 테스트 (단일 요청)
+ */
+async function performQuickPing(ip) {
+    const startTime = performance.now();
+    
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        await fetch(`http://${ip}`, {
+            method: 'HEAD',
+            mode: 'no-cors',
+            cache: 'no-cache',
+            signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        const endTime = performance.now();
+        
+        return { success: true, time: Math.round(endTime - startTime) };
+    } catch (error) {
+        const endTime = performance.now();
+        const responseTime = Math.round(endTime - startTime);
+        
+        if (error.name === 'AbortError') {
+            return { success: false, time: 3000 };
+        }
+        
+        // CORS 에러지만 빠르게 응답했다면 서버가 있다고 판단
+        if (responseTime < 2000) {
+            return { success: true, time: responseTime };
+        }
+        
+        return { success: false, time: responseTime };
+    }
 }
 
 // ==========================================
 // SSH Connection Functions
 // ==========================================
 
-/**
- * SSH 프로토콜을 통해 Xshell 연결 시작
- * 
- * SSH URI 형식: ssh://[user@]host[:port]
- * - user: 사용자명 (선택사항)
- * - host: IP 주소 또는 호스트명 (필수)
- * - port: 포트 번호 (선택사항, 기본값 22)
- */
 function connectSSH() {
-    // 입력값 가져오기
     const ip = document.getElementById('ip-address').value.trim();
     const port = document.getElementById('port').value.trim();
     const username = document.getElementById('username').value.trim();
     
-    // IP 주소 유효성 검사
     if (!ip) {
         showToast(MESSAGES.TOAST.ENTER_IP, 'error');
         document.getElementById('ip-address').focus();
@@ -185,31 +747,20 @@ function connectSSH() {
         return;
     }
     
-    // SSH URI 구성
     let sshUri = 'ssh://';
-    
-    // 사용자명이 있으면 추가
     if (username) {
         sshUri += `${encodeURIComponent(username)}@`;
     }
-    
-    // IP 주소 추가
     sshUri += ip;
-    
-    // 포트가 기본값(22)이 아니면 추가
     if (port && port !== '22') {
         sshUri += `:${port}`;
     }
     
     console.log(`🔗 SSH 연결 시도: ${sshUri}`);
     
-    // SSH 프로토콜 핸들러 호출
-    // 시스템에 SSH 핸들러(Xshell 등)가 등록되어 있어야 함
     try {
         window.location.href = sshUri;
         showToast(`${ip}에 ${MESSAGES.TOAST.SSH_LAUNCHING}`, 'success');
-        
-        // 연결 시도 기록
         updateTargetDisplay(ip, username, port);
     } catch (error) {
         console.error('SSH 연결 오류:', error);
@@ -217,18 +768,9 @@ function connectSSH() {
     }
 }
 
-/**
- * IP 주소 유효성 검사
- * @param {string} ip - 검사할 IP 주소
- * @returns {boolean} 유효 여부
- */
 function isValidIP(ip) {
-    // IPv4 정규식 패턴
     const ipv4Pattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-    
-    // 호스트명도 허용 (간단한 패턴)
     const hostnamePattern = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/;
-    
     return ipv4Pattern.test(ip) || hostnamePattern.test(ip);
 }
 
@@ -236,21 +778,9 @@ function isValidIP(ip) {
 // Ping Test Functions
 // ==========================================
 
-/**
- * 상태 확인 시작
- * 
- * 브라우저 보안 정책으로 인해 실제 ICMP Ping은 불가능
- * 대신 HTTP fetch를 사용하여 연결 가능성 테스트
- * 
- * 테스트 방법:
- * 1. 대상 IP에 HTTP 요청 시도 (타임아웃 설정)
- * 2. 응답 시간 측정
- * 3. 연결 성공/실패 판단
- */
 async function startPingTest() {
     const ip = document.getElementById('ip-address').value.trim();
     
-    // IP 주소 유효성 검사
     if (!ip) {
         showToast(MESSAGES.TOAST.ENTER_IP, 'error');
         document.getElementById('ip-address').focus();
@@ -262,65 +792,44 @@ async function startPingTest() {
         return;
     }
     
-    // 이미 테스트 중이면 중단
     if (pingResults.isRunning) {
         showToast(MESSAGES.TOAST.TEST_RUNNING, 'warning');
         return;
     }
     
-    // 초기화
-    pingResults = {
-        data: [],
-        successful: 0,
-        failed: 0,
-        isRunning: true
-    };
+    pingResults = { data: [], successful: 0, failed: 0, isRunning: true };
     
-    // UI 업데이트
     setStatus('testing', MESSAGES.STATUS.TESTING, MESSAGES.STATUS_DETAIL.PINGING);
     updateTargetDisplay(ip);
     hideGraphOverlay();
     
-    // 버튼 로딩 상태
     const pingBtn = document.getElementById('ping-btn');
     pingBtn.classList.add('btn-loading');
     pingBtn.disabled = true;
     
     document.getElementById('graph-status').textContent = MESSAGES.GRAPH.SCANNING;
     
-    console.log(`📡 ${ip} 상태 확인 시작`);
-    
-    // 상태 확인 실행
     for (let i = 0; i < CONFIG.PING_COUNT; i++) {
         if (!pingResults.isRunning) break;
         
         const result = await performPing(ip);
         pingResults.data.push(result);
         
-        if (result.success) {
-            pingResults.successful++;
-        } else {
-            pingResults.failed++;
-        }
+        if (result.success) pingResults.successful++;
+        else pingResults.failed++;
         
-        // 실시간 통계 및 그래프 업데이트
         updateStatistics();
         drawGraph();
         
-        // 다음 요청 전 대기 (마지막 요청이 아닌 경우)
         if (i < CONFIG.PING_COUNT - 1) {
             await sleep(CONFIG.PING_INTERVAL);
         }
     }
     
-    // 테스트 완료
     pingResults.isRunning = false;
-    
-    // 버튼 상태 복원
     pingBtn.classList.remove('btn-loading');
     pingBtn.disabled = false;
     
-    // 최종 상태 업데이트
     const successRate = (pingResults.successful / CONFIG.PING_COUNT) * 100;
     
     if (successRate >= 50) {
@@ -334,82 +843,44 @@ async function startPingTest() {
         document.getElementById('graph-status').textContent = MESSAGES.GRAPH.UNREACHABLE;
     }
     
-    showToast(`${MESSAGES.TOAST.TEST_COMPLETE_SUCCESS} ${successRate.toFixed(0)}%`, 
+    showToast(`상태 확인 완료: 성공률 ${successRate.toFixed(0)}%`, 
               successRate >= 50 ? 'success' : 'error');
-    
-    console.log(`✅ 상태 확인 완료 - 성공: ${pingResults.successful}/${CONFIG.PING_COUNT}`);
 }
 
-/**
- * 단일 요청 수행
- * 
- * HTTP fetch를 사용하여 연결 테스트
- * - 성공: 응답 시간 반환
- * - 실패: timeout 또는 에러로 표시
- * 
- * @param {string} ip - 대상 IP 주소
- * @returns {Object} {success: boolean, time: number}
- */
 async function performPing(ip) {
     const startTime = performance.now();
     
     try {
-        // AbortController로 타임아웃 구현
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), CONFIG.PING_TIMEOUT);
         
-        // HTTP 요청 시도 (실제로는 연결만 테스트)
-        // 참고: CORS 정책으로 인해 대부분 실패하지만,
-        // 연결 자체의 성공/실패는 판단 가능
         await fetch(`http://${ip}`, {
             method: 'HEAD',
-            mode: 'no-cors',  // CORS 우회
+            mode: 'no-cors',
             cache: 'no-cache',
             signal: controller.signal
         });
         
         clearTimeout(timeoutId);
-        
         const endTime = performance.now();
-        const responseTime = Math.round(endTime - startTime);
         
-        return {
-            success: true,
-            time: responseTime
-        };
-        
+        return { success: true, time: Math.round(endTime - startTime) };
     } catch (error) {
         const endTime = performance.now();
         const responseTime = Math.round(endTime - startTime);
         
-        // AbortError는 타임아웃을 의미
         if (error.name === 'AbortError') {
-            return {
-                success: false,
-                time: CONFIG.PING_TIMEOUT
-            };
+            return { success: false, time: CONFIG.PING_TIMEOUT };
         }
         
-        // 네트워크 에러도 연결 시도로 간주
-        // (CORS 에러지만 서버에 도달은 했을 수 있음)
         if (responseTime < CONFIG.PING_TIMEOUT) {
-            return {
-                success: true,
-                time: responseTime
-            };
+            return { success: true, time: responseTime };
         }
         
-        return {
-            success: false,
-            time: responseTime
-        };
+        return { success: false, time: responseTime };
     }
 }
 
-/**
- * 대기 함수 (Promise 기반)
- * @param {number} ms - 대기 시간 (밀리초)
- */
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -418,115 +889,63 @@ function sleep(ms) {
 // UI Update Functions
 // ==========================================
 
-/**
- * 상태 LED 및 텍스트 업데이트
- * @param {string} status - 상태 ('online', 'offline', 'testing', 'unknown')
- * @param {string} text - 상태 텍스트
- * @param {string} detail - 상세 설명
- */
 function setStatus(status, text, detail = '') {
     const led = document.getElementById('status-led');
     const statusText = document.getElementById('status-text');
     const statusDetail = document.getElementById('status-detail');
     
-    // 기존 상태 클래스 제거
     led.classList.remove('status-online', 'status-offline', 'status-testing', 'status-unknown');
-    
-    // 새 상태 클래스 추가
     led.classList.add(`status-${status}`);
     
-    // 텍스트 업데이트
     statusText.textContent = text;
     statusDetail.textContent = detail;
     
-    // 색상 업데이트
     statusText.classList.remove('text-neon-green', 'text-neon-red', 'text-neon-orange', 'text-gray-500');
     
     switch (status) {
-        case 'online':
-            statusText.classList.add('text-neon-green');
-            break;
-        case 'offline':
-            statusText.classList.add('text-neon-red');
-            break;
-        case 'testing':
-            statusText.classList.add('text-neon-orange');
-            break;
-        default:
-            statusText.classList.add('text-gray-500');
+        case 'online': statusText.classList.add('text-neon-green'); break;
+        case 'offline': statusText.classList.add('text-neon-red'); break;
+        case 'testing': statusText.classList.add('text-neon-orange'); break;
+        default: statusText.classList.add('text-gray-500');
     }
 }
 
-/**
- * 대상 IP 표시 업데이트
- * @param {string} ip - IP 주소
- * @param {string} username - 사용자명 (선택)
- * @param {string} port - 포트 (선택)
- */
 function updateTargetDisplay(ip, username = '', port = '') {
     const display = document.getElementById('target-display');
     let text = ip;
-    
-    if (username) {
-        text = `${username}@${text}`;
-    }
-    if (port && port !== '22') {
-        text += `:${port}`;
-    }
-    
+    if (username) text = `${username}@${text}`;
+    if (port && port !== '22') text += `:${port}`;
     display.textContent = text;
 }
 
-/**
- * 통계 정보 업데이트
- */
 function updateStatistics() {
     const total = pingResults.data.length;
     const successful = pingResults.successful;
     const successRate = total > 0 ? (successful / total) * 100 : 0;
     
-    // 성공한 요청의 응답 시간만 필터링
-    const successfulTimes = pingResults.data
-        .filter(r => r.success)
-        .map(r => r.time);
+    const successfulTimes = pingResults.data.filter(r => r.success).map(r => r.time);
     
-    // 통계 계산
     const avg = successfulTimes.length > 0 
-        ? Math.round(successfulTimes.reduce((a, b) => a + b, 0) / successfulTimes.length)
-        : '--';
-    const min = successfulTimes.length > 0 
-        ? Math.min(...successfulTimes)
-        : '--';
-    const max = successfulTimes.length > 0 
-        ? Math.max(...successfulTimes)
-        : '--';
+        ? Math.round(successfulTimes.reduce((a, b) => a + b, 0) / successfulTimes.length) : '--';
+    const min = successfulTimes.length > 0 ? Math.min(...successfulTimes) : '--';
+    const max = successfulTimes.length > 0 ? Math.max(...successfulTimes) : '--';
     
-    // UI 업데이트
     document.getElementById('stat-requests').textContent = total;
     document.getElementById('stat-success').textContent = `${successRate.toFixed(0)}%`;
     document.getElementById('stat-avg').textContent = typeof avg === 'number' ? `${avg} ms` : avg;
     document.getElementById('stat-min').textContent = typeof min === 'number' ? `${min} ms` : min;
     document.getElementById('stat-max').textContent = typeof max === 'number' ? `${max} ms` : max;
     
-    // 성공률에 따른 색상
     const successEl = document.getElementById('stat-success');
     successEl.classList.remove('text-neon-green', 'text-neon-orange', 'text-neon-red');
     
-    if (successRate >= 80) {
-        successEl.classList.add('text-neon-green');
-    } else if (successRate >= 50) {
-        successEl.classList.add('text-neon-orange');
-    } else {
-        successEl.classList.add('text-neon-red');
-    }
+    if (successRate >= 80) successEl.classList.add('text-neon-green');
+    else if (successRate >= 50) successEl.classList.add('text-neon-orange');
+    else successEl.classList.add('text-neon-red');
 }
 
-/**
- * IP 입력 핸들러
- */
 function handleIPInput(e) {
     const ip = e.target.value.trim();
-    
     if (ip && isValidIP(ip)) {
         updateTargetDisplay(ip);
     } else {
@@ -538,45 +957,27 @@ function handleIPInput(e) {
 // Graph Functions
 // ==========================================
 
-/**
- * 그래프 캔버스 초기화
- */
 function initGraph() {
     const canvas = document.getElementById('response-graph');
     graphCtx = canvas.getContext('2d');
-    
-    // 캔버스 크기를 부모 컨테이너에 맞춤
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 }
 
-/**
- * 캔버스 크기 조정
- */
 function resizeCanvas() {
     const canvas = document.getElementById('response-graph');
     const container = canvas.parentElement;
-    
-    // 디바이스 픽셀 비율 고려 (고해상도 디스플레이 지원)
     const dpr = window.devicePixelRatio || 1;
     
     canvas.width = container.clientWidth * dpr;
     canvas.height = container.clientHeight * dpr;
-    
     canvas.style.width = `${container.clientWidth}px`;
     canvas.style.height = `${container.clientHeight}px`;
-    
     graphCtx.scale(dpr, dpr);
     
-    // 크기 조정 후 다시 그리기
-    if (pingResults.data.length > 0) {
-        drawGraph();
-    }
+    if (pingResults.data.length > 0) drawGraph();
 }
 
-/**
- * 응답 시간 그래프 그리기
- */
 function drawGraph() {
     const canvas = document.getElementById('response-graph');
     const width = canvas.clientWidth;
@@ -586,22 +987,17 @@ function drawGraph() {
     const graphWidth = width - padding.left - padding.right;
     const graphHeight = height - padding.top - padding.bottom;
     
-    // 캔버스 초기화
     graphCtx.clearRect(0, 0, width, height);
     
     const data = pingResults.data.slice(-CONFIG.GRAPH_MAX_POINTS);
     if (data.length === 0) return;
     
-    // 평균 계산 (성공한 요청만)
     const successfulTimes = data.filter(r => r.success).map(r => r.time);
     const avgTime = successfulTimes.length > 0
-        ? successfulTimes.reduce((a, b) => a + b, 0) / successfulTimes.length
-        : 0;
+        ? successfulTimes.reduce((a, b) => a + b, 0) / successfulTimes.length : 0;
     
-    // 평균선 그리기
     if (avgTime > 0) {
         const avgY = padding.top + graphHeight - (avgTime / CONFIG.GRAPH_MAX_MS) * graphHeight;
-        
         graphCtx.beginPath();
         graphCtx.strokeStyle = 'rgba(255, 136, 0, 0.3)';
         graphCtx.lineWidth = 1;
@@ -612,22 +1008,12 @@ function drawGraph() {
         graphCtx.setLineDash([]);
     }
     
-    // 데이터 포인트 간격
     const pointSpacing = graphWidth / (CONFIG.GRAPH_MAX_POINTS - 1);
     
-    // 라인 그리기
-    graphCtx.beginPath();
-    graphCtx.strokeStyle = '#00f5ff';
-    graphCtx.lineWidth = 2;
-    graphCtx.lineJoin = 'round';
-    graphCtx.lineCap = 'round';
-    
-    // 그라데이션 영역 (라인 아래)
     const gradient = graphCtx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
     gradient.addColorStop(0, 'rgba(0, 245, 255, 0.3)');
     gradient.addColorStop(1, 'rgba(0, 245, 255, 0)');
     
-    // 영역 채우기용 경로
     graphCtx.beginPath();
     
     data.forEach((point, index) => {
@@ -635,18 +1021,14 @@ function drawGraph() {
         const normalizedTime = Math.min(point.time, CONFIG.GRAPH_MAX_MS);
         const y = padding.top + graphHeight - (normalizedTime / CONFIG.GRAPH_MAX_MS) * graphHeight;
         
-        if (index === 0) {
-            graphCtx.moveTo(x, y);
-        } else {
-            graphCtx.lineTo(x, y);
-        }
+        if (index === 0) graphCtx.moveTo(x, y);
+        else graphCtx.lineTo(x, y);
     });
     
-    // 라인 그리기
     graphCtx.strokeStyle = '#00f5ff';
+    graphCtx.lineWidth = 2;
     graphCtx.stroke();
     
-    // 영역 채우기
     const lastX = padding.left + ((data.length - 1) * pointSpacing);
     graphCtx.lineTo(lastX, height - padding.bottom);
     graphCtx.lineTo(padding.left, height - padding.bottom);
@@ -654,195 +1036,35 @@ function drawGraph() {
     graphCtx.fillStyle = gradient;
     graphCtx.fill();
     
-    // 데이터 포인트 그리기
     data.forEach((point, index) => {
         const x = padding.left + (index * pointSpacing);
         const normalizedTime = Math.min(point.time, CONFIG.GRAPH_MAX_MS);
         const y = padding.top + graphHeight - (normalizedTime / CONFIG.GRAPH_MAX_MS) * graphHeight;
         
-        // 포인트 원
         graphCtx.beginPath();
         graphCtx.arc(x, y, 4, 0, Math.PI * 2);
-        
-        if (point.success) {
-            graphCtx.fillStyle = '#00f5ff';
-        } else {
-            graphCtx.fillStyle = '#ff0055';
-        }
-        
+        graphCtx.fillStyle = point.success ? '#00f5ff' : '#ff0055';
         graphCtx.fill();
         
-        // 글로우 효과
         graphCtx.beginPath();
         graphCtx.arc(x, y, 6, 0, Math.PI * 2);
-        graphCtx.fillStyle = point.success 
-            ? 'rgba(0, 245, 255, 0.3)' 
-            : 'rgba(255, 0, 85, 0.3)';
+        graphCtx.fillStyle = point.success ? 'rgba(0, 245, 255, 0.3)' : 'rgba(255, 0, 85, 0.3)';
         graphCtx.fill();
     });
 }
 
-/**
- * 그래프 오버레이 숨기기
- */
 function hideGraphOverlay() {
-    const overlay = document.getElementById('graph-overlay');
-    overlay.style.display = 'none';
-}
-
-// ==========================================
-// Quick Access (Host Saving) Functions
-// ==========================================
-
-/**
- * 현재 호스트 정보 저장
- */
-function saveCurrentHost() {
-    const ip = document.getElementById('ip-address').value.trim();
-    const port = document.getElementById('port').value.trim() || CONFIG.DEFAULT_SSH_PORT;
-    const username = document.getElementById('username').value.trim();
-    
-    if (!ip) {
-        showToast(MESSAGES.TOAST.ENTER_IP, 'warning');
-        return;
-    }
-    
-    if (!isValidIP(ip)) {
-        showToast(MESSAGES.TOAST.INVALID_IP, 'error');
-        return;
-    }
-    
-    // 기존 호스트 목록 불러오기
-    const hosts = getSavedHosts();
-    
-    // 중복 체크
-    const exists = hosts.some(h => h.ip === ip && h.port === port);
-    if (exists) {
-        showToast(MESSAGES.TOAST.HOST_EXISTS, 'warning');
-        return;
-    }
-    
-    // 새 호스트 추가
-    hosts.push({
-        ip,
-        port,
-        username,
-        addedAt: new Date().toISOString()
-    });
-    
-    // 저장
-    localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(hosts));
-    
-    // UI 업데이트
-    loadSavedHosts();
-    
-    showToast(`${ip} ${MESSAGES.TOAST.HOST_SAVED}`, 'success');
-}
-
-/**
- * 저장된 호스트 목록 불러오기
- * @returns {Array} 호스트 목록
- */
-function getSavedHosts() {
-    try {
-        const data = localStorage.getItem(CONFIG.STORAGE_KEY);
-        return data ? JSON.parse(data) : [];
-    } catch (error) {
-        console.error('저장된 호스트 불러오기 오류:', error);
-        return [];
-    }
-}
-
-/**
- * 저장된 호스트 목록 UI에 로드
- */
-function loadSavedHosts() {
-    const container = document.getElementById('quick-access-list');
-    const hosts = getSavedHosts();
-    
-    if (hosts.length === 0) {
-        container.innerHTML = `
-            <div class="text-center text-gray-600 text-sm py-4">
-                <div class="text-2xl mb-2 opacity-30">📌</div>
-                ${MESSAGES.QUICK_ACCESS.NO_HOSTS}
-            </div>
-        `;
-        return;
-    }
-    
-    container.innerHTML = hosts.map((host, index) => `
-        <div class="quick-access-item" onclick="loadHost(${index})">
-            <div class="host-indicator"></div>
-            <div class="host-info">
-                <div class="host-ip">${host.ip}${host.port !== '22' ? ':' + host.port : ''}</div>
-                ${host.username ? `<div class="host-user">${host.username}@</div>` : ''}
-            </div>
-            <button class="delete-btn" onclick="event.stopPropagation(); deleteHost(${index})" title="삭제">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-        </div>
-    `).join('');
-}
-
-/**
- * 저장된 호스트 정보 로드
- * @param {number} index - 호스트 인덱스
- */
-function loadHost(index) {
-    const hosts = getSavedHosts();
-    const host = hosts[index];
-    
-    if (host) {
-        document.getElementById('ip-address').value = host.ip;
-        document.getElementById('port').value = host.port || '';
-        document.getElementById('username').value = host.username || '';
-        
-        updateTargetDisplay(host.ip, host.username, host.port);
-        
-        showToast(`${host.ip} ${MESSAGES.TOAST.HOST_LOADED}`, 'info');
-    }
-}
-
-/**
- * 저장된 호스트 삭제
- * @param {number} index - 호스트 인덱스
- */
-function deleteHost(index) {
-    const hosts = getSavedHosts();
-    const host = hosts[index];
-    
-    if (confirm(`${host.ip}을(를) ${MESSAGES.QUICK_ACCESS.DELETE_CONFIRM}`)) {
-        hosts.splice(index, 1);
-        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(hosts));
-        loadSavedHosts();
-        showToast(MESSAGES.TOAST.HOST_DELETED, 'info');
-    }
+    document.getElementById('graph-overlay').style.display = 'none';
 }
 
 // ==========================================
 // Toast Notification Functions
 // ==========================================
 
-/**
- * 토스트 알림 표시
- * @param {string} message - 알림 메시지
- * @param {string} type - 알림 유형 ('success', 'error', 'warning', 'info')
- * @param {number} duration - 표시 시간 (ms)
- */
 function showToast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toast-container');
+    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
     
-    // 아이콘 선택
-    const icons = {
-        success: '✓',
-        error: '✕',
-        warning: '⚠',
-        info: 'ℹ'
-    };
-    
-    // 토스트 요소 생성
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
@@ -850,49 +1072,25 @@ function showToast(message, type = 'info', duration = 3000) {
         <span>${message}</span>
     `;
     
-    // 컨테이너에 추가
     container.appendChild(toast);
     
-    // 자동 제거
     setTimeout(() => {
         toast.style.animation = 'slide-in 0.3s ease-out reverse';
-        setTimeout(() => {
-            toast.remove();
-        }, 300);
+        setTimeout(() => toast.remove(), 300);
     }, duration);
 }
 
 // ==========================================
-// Utility Functions
+// Debug Function
 // ==========================================
 
-/**
- * 포맷된 날짜/시간 문자열 반환
- * @param {Date} date - 날짜 객체
- * @returns {string} 포맷된 문자열
- */
-function formatDateTime(date) {
-    return date.toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-    });
-}
-
-/**
- * 디버그 정보 콘솔 출력
- */
 function debugInfo() {
-    console.group('🔧 네트워크 관제 센터 디버그 정보');
+    console.group('🔧 네트워크 관제 센터 v2.0 디버그 정보');
     console.log('상태 확인 결과:', pingResults);
-    console.log('저장된 호스트:', getSavedHosts());
+    console.log('서버 그룹:', getServerGroups());
+    console.log('펼쳐진 폴더:', [...expandedFolders]);
     console.log('설정값:', CONFIG);
     console.groupEnd();
 }
 
-// 글로벌 스코프에 디버그 함수 노출
 window.debugInfo = debugInfo;
