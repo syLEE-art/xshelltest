@@ -1,33 +1,31 @@
 /* ==========================================
-   네트워크 관제 센터 v3.0 - 보안 적용 버전
+   네트워크 관제 센터 v3.1 - 보안 업그레이드 버전
    ==========================================
    - SHA-256 비밀번호 해시 검증
    - AES-256 서버 데이터 암호화
-   - sessionStorage 세션 관리
+   - 비밀번호 변경 기능
+   - Xshell 레지스트리 등록 파일 다운로드
    ========================================== */
 
 // ==========================================
 // 보안 설정 (Security Configuration)
 // ==========================================
 
-/**
- * 보안 상수
- * - PASSWORD_HASH: "이소영"의 SHA-256 해시값
- * - ENCRYPTED_DATA: AES-256으로 암호화된 초기 서버 데이터
- * 
- * ⚠️ 중요: 비밀번호를 모르면 소스 코드를 봐도 서버 정보를 알 수 없습니다.
- */
 const SECURITY = {
-    // "이소영"의 SHA-256 해시값
-    PASSWORD_HASH: 'db97cb66bad0d531ab03b5e39d9626fc8d85015615a082a00bb526486a3e49cf',
+    // 기본 비밀번호 "dlthdud"의 SHA-256 해시값
+    DEFAULT_PASSWORD_HASH: 'db97cb66bad0d531ab03b5e39d9626fc8d85015615a082a00bb526486a3e49cf',
     
-    // AES-256으로 암호화된 초기 서버 데이터 (비밀번호: "이소영")
-    // 이 데이터는 올바른 비밀번호 없이는 복호화할 수 없습니다.
-    ENCRYPTED_INITIAL_DATA: 'U2FsdGVkX1+cXnPPQOVBCbWqANXwmPnRS9kp/9SGfp90OyMw/1/F3/+LiEQ0A9A8tAVXQ/v4N+Kl8Rl2QZMbT/FPo1rLF9p8T+tMdfMSMY1uONGhz3iUC4lTw0z+/XbzUraC+Xxz6S4dNhyWdrJ2fYynbaXUbgrEzJi0Y3gEwfAYpVzBKASCNdbMCOcWlYZRXHxsPmKznLcgj2rE97joHriASgywHfaJk3G0ETrz4/Tc1EGL3zl8f52trtSKNEOuqVvnjlO8HvDSD/1cX5OShgbVkeOBcDTm3ZZFrAgfIwUneObfYLgt0CaCBH1S/y5GKuSsz8IZjKxg54Lo3IXv3SzWFvtxDILbdsj5CeoMr5C3iwwhAmI1/ZJV6QInn4aRj9/KvIkNPOfhHnxrWIoWcE5d0NowPJNjUO5AOI9Ifmg5/1itS/tb/GZmAsffEGI76RxwG53akTLCXkItL8BlPk3C2CeYuOg+hfwZ0TQ+Te7bxa6vmLh0fvnX4KEG1VoE8lVepWH+KyfFnb48pOZaAVZZPooxEI2tcwHPL+1Zlvv/lWtWjlb7PvkbujspxhdO',
+    // 사용자 정의 해시를 저장할 localStorage 키
+    CUSTOM_HASH_KEY: 'ncc_custom_password_hash',
+    
+    // AES-256으로 암호화된 초기 서버 데이터 (비밀번호: "dlthdud")
+    ENCRYPTED_INITIAL_DATA: 'U2FsdGVkX1+9v95RbwdQ3Aa1r5s5qM1eFiFc9wzqCdhiodgeR6Q6UURmY2J6a5wSFVb/Div21qBqEpYVoN4G+O8sC2+yTFf3x3YOesQlcuQTWEJ+v4WyRwGepx17SWk0PqdYDW65atDpmpG/JS4GFmyNgLRSnc53WVcFa4RvNn0hYk7/UqGBprqzD73uB/AHzL0yVEnddaaB+KwByrre3gxANgdSMBHDZjIKMY2ttKR8ti1tQ6eg2MBDQj8y74Y4vgy/3jp/b+rRxgwP0qLeCNe1Wm14kIvGfYe8Cqg37spXTMVdJH3vVWYz664pYo8gZ8Aoh/pZyeo1b8driQq1cU3JDc8MfunNrzdq0zYu1fNfliQjf60cTfUsmu1yyiniPYPMBZP7JllIQOpAA0o0WVRg6y5sMB4VevS0fLr/Ud6Lym1ADrr/CbVqscXY4I39kskTpLMLYQmKreA2nc6MFA6DlTJ20TjZmL/CcCSbbwDks4s6Ho52y7HeuOAvZxCKsoWwixTpj27EQMNiv7v1j7BbUxc4fdH7Jenat5bhFgrHWGOIZqKnBaHVqEWSdSnI',
     
     // 세션 스토리지 키
     SESSION_KEY: 'ncc_authenticated',
-    SESSION_PASSWORD_KEY: 'ncc_session_key'
+    
+    // 암호화된 데이터 저장 키
+    STORAGE_KEY: 'network_control_server_groups_encrypted'
 };
 
 // ==========================================
@@ -40,7 +38,6 @@ const CONFIG = {
     PING_TIMEOUT: 5000,
     GRAPH_MAX_POINTS: 20,
     GRAPH_MAX_MS: 500,
-    STORAGE_KEY: 'network_control_server_groups_encrypted',
     DEFAULT_SSH_PORT: 22
 };
 
@@ -86,43 +83,48 @@ const MESSAGES = {
         GROUP_PING_COMPLETE: '전체 상태 확인 완료',
         LOGIN_SUCCESS: '인증에 성공했습니다',
         LOGIN_FAILED: '비밀번호가 올바르지 않습니다',
-        LOGOUT_SUCCESS: '로그아웃 되었습니다'
+        LOGOUT_SUCCESS: '로그아웃 되었습니다',
+        PASSWORD_CHANGED: '비밀번호가 변경되었습니다',
+        XSHELL_REG_DOWNLOADED: 'Xshell 레지스트리 파일이 다운로드되었습니다'
     }
 };
 
 let pingResults = { data: [], successful: 0, failed: 0, isRunning: false };
 let graphCtx = null;
 let expandedFolders = new Set();
-let currentPassword = null; // 복호화에 사용할 비밀번호 (메모리에만 저장)
+let currentPassword = null;
 
 // ==========================================
-// Security Functions (보안 함수)
+// Security Functions
 // ==========================================
 
 /**
  * SHA-256 해시 생성
- * @param {string} input - 해시할 문자열
- * @returns {string} SHA-256 해시값 (hex)
  */
 function generateHash(input) {
     return CryptoJS.SHA256(input).toString();
 }
 
 /**
- * 비밀번호 검증 (SHA-256 해시 비교)
- * @param {string} password - 사용자 입력 비밀번호
- * @returns {boolean} 검증 결과
+ * 현재 유효한 비밀번호 해시 가져오기
+ * (사용자 정의 해시가 있으면 그것을, 없으면 기본 해시 반환)
+ */
+function getValidPasswordHash() {
+    const customHash = localStorage.getItem(SECURITY.CUSTOM_HASH_KEY);
+    return customHash || SECURITY.DEFAULT_PASSWORD_HASH;
+}
+
+/**
+ * 비밀번호 검증
  */
 function verifyPassword(password) {
     const inputHash = generateHash(password);
-    return inputHash === SECURITY.PASSWORD_HASH;
+    const validHash = getValidPasswordHash();
+    return inputHash === validHash;
 }
 
 /**
  * AES-256 복호화
- * @param {string} encryptedData - 암호화된 데이터
- * @param {string} password - 복호화 키 (비밀번호)
- * @returns {Object|null} 복호화된 객체 또는 null (실패 시)
  */
 function decryptData(encryptedData, password) {
     try {
@@ -138,9 +140,6 @@ function decryptData(encryptedData, password) {
 
 /**
  * AES-256 암호화
- * @param {Object} data - 암호화할 객체
- * @param {string} password - 암호화 키 (비밀번호)
- * @returns {string} 암호화된 문자열
  */
 function encryptData(data, password) {
     return CryptoJS.AES.encrypt(JSON.stringify(data), password).toString();
@@ -155,61 +154,58 @@ function attemptLogin() {
     const password = passwordInput.value;
     
     if (!password) {
-        errorDiv.classList.remove('hidden');
-        errorDiv.textContent = '비밀번호를 입력해주세요.';
+        showLoginError('비밀번호를 입력해주세요.');
         passwordInput.focus();
         return;
     }
     
     // SHA-256 해시 검증
     if (!verifyPassword(password)) {
-        errorDiv.classList.remove('hidden');
-        errorDiv.textContent = '비밀번호가 올바르지 않습니다.';
+        showLoginError('비밀번호가 올바르지 않습니다.');
         passwordInput.value = '';
         passwordInput.focus();
         return;
     }
     
-    // AES-256 복호화 테스트
-    const testDecrypt = decryptData(SECURITY.ENCRYPTED_INITIAL_DATA, password);
-    if (!testDecrypt) {
-        errorDiv.classList.remove('hidden');
-        errorDiv.textContent = '데이터 복호화에 실패했습니다.';
+    // 복호화 테스트 - 기존 데이터가 있으면 그것으로, 없으면 초기 데이터로
+    const savedEncryptedData = localStorage.getItem(SECURITY.STORAGE_KEY);
+    const testData = savedEncryptedData || SECURITY.ENCRYPTED_INITIAL_DATA;
+    const testDecrypt = decryptData(testData, password);
+    
+    if (!testDecrypt && savedEncryptedData) {
+        // 저장된 데이터가 있는데 복호화 실패 = 비밀번호가 변경된 상태에서 다른 비밀번호 입력
+        showLoginError('데이터 복호화에 실패했습니다. 비밀번호를 확인해주세요.');
         return;
     }
     
     // 로그인 성공
     currentPassword = password;
-    
-    // sessionStorage에 인증 상태 저장 (비밀번호는 저장하지 않음 - 보안)
-    // 대신 암호화된 세션 토큰 생성
-    const sessionToken = CryptoJS.AES.encrypt(
-        JSON.stringify({ timestamp: Date.now(), hash: SECURITY.PASSWORD_HASH }),
-        password
-    ).toString();
     sessionStorage.setItem(SECURITY.SESSION_KEY, 'true');
-    sessionStorage.setItem(SECURITY.SESSION_PASSWORD_KEY, sessionToken);
     
-    // UI 전환
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('main-dashboard').classList.remove('hidden');
     
-    // 대시보드 초기화
     initializeDashboard();
-    
     showToast(MESSAGES.TOAST.LOGIN_SUCCESS, 'success');
+}
+
+/**
+ * 로그인 에러 표시
+ */
+function showLoginError(message) {
+    const errorDiv = document.getElementById('login-error');
+    errorDiv.classList.remove('hidden', 'text-cyan-400', 'bg-cyan-500/10', 'border-cyan-500/20');
+    errorDiv.classList.add('text-rose-400', 'bg-rose-500/10', 'border-rose-500/20');
+    errorDiv.textContent = message;
 }
 
 /**
  * 로그아웃
  */
 function logout() {
-    // 세션 정보 삭제
     sessionStorage.removeItem(SECURITY.SESSION_KEY);
-    sessionStorage.removeItem(SECURITY.SESSION_PASSWORD_KEY);
     currentPassword = null;
     
-    // UI 전환
     document.getElementById('main-dashboard').classList.add('hidden');
     document.getElementById('login-screen').classList.remove('hidden');
     document.getElementById('login-password').value = '';
@@ -219,46 +215,28 @@ function logout() {
 }
 
 /**
- * 세션 확인 및 자동 로그인
+ * 세션 확인
  */
 function checkSession() {
-    const isAuthenticated = sessionStorage.getItem(SECURITY.SESSION_KEY);
-    
-    if (isAuthenticated === 'true') {
-        // 이미 인증된 세션 - 비밀번호 재입력 요청
-        // 보안상 비밀번호를 sessionStorage에 저장하지 않으므로, 
-        // 페이지 새로고침 시에도 비밀번호 재입력 필요
-        // (탭을 닫지 않고 새로고침하는 경우)
-        document.getElementById('login-screen').classList.remove('hidden');
-        document.getElementById('main-dashboard').classList.add('hidden');
-        
-        // 힌트 표시
-        const hintDiv = document.getElementById('login-error');
-        hintDiv.classList.remove('hidden');
-        hintDiv.classList.remove('text-rose-400', 'bg-rose-500/10', 'border-rose-500/20');
-        hintDiv.classList.add('text-cyan-400', 'bg-cyan-500/10', 'border-cyan-500/20');
-        hintDiv.textContent = '세션이 유지되어 있습니다. 비밀번호를 다시 입력해주세요.';
-    } else {
-        document.getElementById('login-screen').classList.remove('hidden');
-        document.getElementById('main-dashboard').classList.add('hidden');
-    }
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('main-dashboard').classList.add('hidden');
 }
 
 /**
  * 비밀번호 표시/숨기기 토글
  */
-function togglePasswordVisibility() {
-    const input = document.getElementById('login-password');
-    const eyeIcon = document.getElementById('eye-icon');
+function togglePasswordVisibility(inputId, iconId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
     
     if (input.type === 'password') {
         input.type = 'text';
-        eyeIcon.innerHTML = `
+        icon.innerHTML = `
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
         `;
     } else {
         input.type = 'password';
-        eyeIcon.innerHTML = `
+        icon.innerHTML = `
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
         `;
@@ -266,26 +244,207 @@ function togglePasswordVisibility() {
 }
 
 // ==========================================
-// Encrypted Data Management (암호화된 데이터 관리)
+// Password Change Functions
 // ==========================================
 
 /**
- * 암호화된 서버 그룹 데이터 불러오기
- * @returns {Object} 복호화된 서버 그룹 데이터
+ * 비밀번호 변경 모달 열기
+ */
+function openPasswordChangeModal() {
+    document.getElementById('current-password').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-password').value = '';
+    document.getElementById('password-change-message').classList.add('hidden');
+    document.getElementById('password-change-modal').classList.remove('hidden');
+    document.getElementById('current-password').focus();
+}
+
+/**
+ * 비밀번호 변경 모달 닫기
+ */
+function closePasswordChangeModal() {
+    document.getElementById('password-change-modal').classList.add('hidden');
+}
+
+/**
+ * 비밀번호 변경 메시지 표시
+ */
+function showPasswordChangeMessage(message, isError = true) {
+    const msgDiv = document.getElementById('password-change-message');
+    msgDiv.classList.remove('hidden', 'text-rose-400', 'bg-rose-500/10', 'border-rose-500/20',
+                            'text-emerald-400', 'bg-emerald-500/10', 'border-emerald-500/20');
+    
+    if (isError) {
+        msgDiv.classList.add('text-rose-400', 'bg-rose-500/10', 'border', 'border-rose-500/20');
+    } else {
+        msgDiv.classList.add('text-emerald-400', 'bg-emerald-500/10', 'border', 'border-emerald-500/20');
+    }
+    msgDiv.textContent = message;
+}
+
+/**
+ * 비밀번호 변경 처리
+ */
+function changePassword() {
+    const currentPwd = document.getElementById('current-password').value;
+    const newPwd = document.getElementById('new-password').value;
+    const confirmPwd = document.getElementById('confirm-password').value;
+    
+    // 유효성 검사
+    if (!currentPwd) {
+        showPasswordChangeMessage('현재 비밀번호를 입력해주세요.');
+        document.getElementById('current-password').focus();
+        return;
+    }
+    
+    if (!newPwd) {
+        showPasswordChangeMessage('새 비밀번호를 입력해주세요.');
+        document.getElementById('new-password').focus();
+        return;
+    }
+    
+    if (newPwd.length < 4) {
+        showPasswordChangeMessage('새 비밀번호는 4자 이상이어야 합니다.');
+        document.getElementById('new-password').focus();
+        return;
+    }
+    
+    if (newPwd !== confirmPwd) {
+        showPasswordChangeMessage('새 비밀번호가 일치하지 않습니다.');
+        document.getElementById('confirm-password').focus();
+        return;
+    }
+    
+    if (currentPwd === newPwd) {
+        showPasswordChangeMessage('현재 비밀번호와 다른 비밀번호를 입력해주세요.');
+        document.getElementById('new-password').focus();
+        return;
+    }
+    
+    // 현재 비밀번호 검증
+    if (!verifyPassword(currentPwd)) {
+        showPasswordChangeMessage('현재 비밀번호가 올바르지 않습니다.');
+        document.getElementById('current-password').value = '';
+        document.getElementById('current-password').focus();
+        return;
+    }
+    
+    try {
+        // 1. 현재 데이터 복호화
+        const currentData = getServerGroups();
+        
+        // 2. 새 비밀번호 해시 저장
+        const newHash = generateHash(newPwd);
+        localStorage.setItem(SECURITY.CUSTOM_HASH_KEY, newHash);
+        
+        // 3. 현재 비밀번호 업데이트
+        currentPassword = newPwd;
+        
+        // 4. 데이터를 새 비밀번호로 재암호화하여 저장
+        saveServerGroups(currentData);
+        
+        showPasswordChangeMessage('비밀번호가 성공적으로 변경되었습니다.', false);
+        showToast(MESSAGES.TOAST.PASSWORD_CHANGED, 'success');
+        
+        // 2초 후 모달 닫기
+        setTimeout(() => {
+            closePasswordChangeModal();
+        }, 2000);
+        
+    } catch (error) {
+        console.error('비밀번호 변경 오류:', error);
+        showPasswordChangeMessage('비밀번호 변경 중 오류가 발생했습니다.');
+    }
+}
+
+// ==========================================
+// Xshell Registry File Download
+// ==========================================
+
+/**
+ * Xshell SSH 프로토콜 핸들러 레지스트리 파일 다운로드
+ */
+function downloadXshellRegistry() {
+    // Windows Registry 파일 내용
+    const regContent = `Windows Registry Editor Version 5.00
+
+; ==========================================
+; Xshell 7 SSH Protocol Handler Registration
+; 네트워크 관제 센터 - SSH 프로토콜 연동
+; ==========================================
+
+; SSH 프로토콜 핸들러 등록
+[HKEY_CLASSES_ROOT\\ssh]
+@="URL:SSH Protocol"
+"URL Protocol"=""
+
+[HKEY_CLASSES_ROOT\\ssh\\DefaultIcon]
+@="C:\\\\Program Files (x86)\\\\NetSarang\\\\Xshell 7\\\\Xshell.exe,0"
+
+[HKEY_CLASSES_ROOT\\ssh\\shell]
+
+[HKEY_CLASSES_ROOT\\ssh\\shell\\open]
+
+[HKEY_CLASSES_ROOT\\ssh\\shell\\open\\command]
+@="\\"C:\\\\Program Files (x86)\\\\NetSarang\\\\Xshell 7\\\\Xshell.exe\\" -url \\"%1\\""
+
+; ==========================================
+; 사용법:
+; 1. 이 파일을 더블클릭하여 실행합니다.
+; 2. "예"를 클릭하여 레지스트리에 추가합니다.
+; 3. 이후 ssh:// 링크 클릭 시 Xshell 7이 실행됩니다.
+;
+; 주의사항:
+; - Xshell 7이 기본 경로에 설치되어 있어야 합니다.
+; - 다른 경로에 설치된 경우 위 경로를 수정해주세요.
+; - 관리자 권한이 필요할 수 있습니다.
+; ==========================================
+`;
+
+    // Blob 생성 (UTF-16 LE with BOM for .reg files)
+    const bom = new Uint8Array([0xFF, 0xFE]); // UTF-16 LE BOM
+    const encoder = new TextEncoder();
+    const utf8Content = encoder.encode(regContent);
+    
+    // UTF-8로 충분 (Windows Registry Editor가 자동 인식)
+    const blob = new Blob([regContent], { type: 'application/octet-stream' });
+    
+    // 다운로드 링크 생성
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'xshell_ssh_protocol_handler.reg';
+    
+    // 다운로드 실행
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // URL 해제
+    URL.revokeObjectURL(url);
+    
+    showToast(MESSAGES.TOAST.XSHELL_REG_DOWNLOADED, 'success');
+}
+
+// ==========================================
+// Encrypted Data Management
+// ==========================================
+
+/**
+ * 서버 그룹 데이터 불러오기 (복호화)
  */
 function getServerGroups() {
     if (!currentPassword) return {};
     
     try {
-        const encryptedData = localStorage.getItem(CONFIG.STORAGE_KEY);
+        const encryptedData = localStorage.getItem(SECURITY.STORAGE_KEY);
         
         if (!encryptedData) {
-            // 저장된 데이터가 없으면 초기 데이터 복호화하여 반환
+            // 저장된 데이터 없으면 초기 데이터 복호화
             const initialData = decryptData(SECURITY.ENCRYPTED_INITIAL_DATA, currentPassword);
             return initialData || {};
         }
         
-        // 저장된 암호화 데이터 복호화
         const decryptedData = decryptData(encryptedData, currentPassword);
         return decryptedData || {};
     } catch (error) {
@@ -295,15 +454,14 @@ function getServerGroups() {
 }
 
 /**
- * 서버 그룹 데이터 암호화하여 저장
- * @param {Object} groups - 저장할 서버 그룹 데이터
+ * 서버 그룹 데이터 저장 (암호화)
  */
 function saveServerGroups(groups) {
     if (!currentPassword) return;
     
     try {
         const encryptedData = encryptData(groups, currentPassword);
-        localStorage.setItem(CONFIG.STORAGE_KEY, encryptedData);
+        localStorage.setItem(SECURITY.STORAGE_KEY, encryptedData);
     } catch (error) {
         console.error('데이터 저장 오류:', error);
         showToast('데이터 저장 중 오류가 발생했습니다', 'error');
@@ -315,31 +473,21 @@ function saveServerGroups(groups) {
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 세션 확인
     checkSession();
     
-    // 로그인 입력 필드 이벤트
     const loginInput = document.getElementById('login-password');
     if (loginInput) {
         loginInput.focus();
     }
 });
 
-/**
- * 대시보드 초기화 (로그인 성공 후)
- */
 function initializeDashboard() {
-    // 시간 표시 시작
     updateClock();
     setInterval(updateClock, 1000);
     
-    // 그래프 캔버스 초기화
     initGraph();
-    
-    // 서버 그룹 로드
     loadServerGroups();
     
-    // IP 입력 필드 이벤트 리스너
     const ipInput = document.getElementById('ip-address');
     if (ipInput) {
         ipInput.addEventListener('input', handleIPInput);
@@ -348,7 +496,6 @@ function initializeDashboard() {
         });
     }
     
-    // 모달 외부 클릭 시 닫기
     document.querySelectorAll('.modal-overlay').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -357,7 +504,7 @@ function initializeDashboard() {
         });
     });
     
-    console.log('🔒 네트워크 관제 센터 v3.0 (보안 모드) 초기화 완료');
+    console.log('🔒 네트워크 관제 센터 v3.1 초기화 완료');
 }
 
 function updateClock() {
@@ -1194,12 +1341,11 @@ function showToast(message, type = 'info', duration = 3000) {
 // ==========================================
 
 function debugInfo() {
-    console.group('🔒 네트워크 관제 센터 v3.0 디버그 정보');
+    console.group('🔒 네트워크 관제 센터 v3.1 디버그 정보');
     console.log('인증 상태:', sessionStorage.getItem(SECURITY.SESSION_KEY));
     console.log('비밀번호 설정됨:', !!currentPassword);
-    console.log('상태 확인 결과:', pingResults);
-    console.log('서버 그룹 (복호화됨):', getServerGroups());
-    console.log('펼쳐진 폴더:', [...expandedFolders]);
+    console.log('커스텀 해시 존재:', !!localStorage.getItem(SECURITY.CUSTOM_HASH_KEY));
+    console.log('서버 그룹:', getServerGroups());
     console.groupEnd();
 }
 

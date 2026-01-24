@@ -6,16 +6,17 @@
     <title>네트워크 관제 센터 | Secure Access</title>
     
     <!-- ==========================================
-         네트워크 모니터링 대시보드 v3.0
+         네트워크 모니터링 대시보드 v3.1
          - SHA-256 비밀번호 해시 검증
          - AES-256 데이터 암호화
-         - 글래스모피즘 디자인
+         - 비밀번호 변경 기능
+         - Xshell 레지스트리 등록 파일 다운로드
          ========================================== -->
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- CryptoJS CDN - SHA-256 & AES-256 암호화 라이브러리 -->
+    <!-- CryptoJS CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     
     <!-- Google Fonts -->
@@ -51,13 +52,10 @@
     </div>
     
     <!-- ==========================================
-         Login Screen (보안 인증 화면)
-         - 비밀번호 입력 시 SHA-256 해시 검증
-         - 인증 성공 시 AES-256 복호화
+         Login Screen
          ========================================== -->
     <div id="login-screen" class="login-screen">
         <div class="login-container glass-card">
-            <!-- 로고 -->
             <div class="text-center mb-8">
                 <div class="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/30">
                     <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,7 +66,6 @@
                 <p class="text-white/50 text-sm">보안 인증이 필요합니다</p>
             </div>
             
-            <!-- 비밀번호 입력 폼 -->
             <div class="space-y-4">
                 <div>
                     <label class="label">비밀번호</label>
@@ -83,10 +80,10 @@
                         >
                         <button 
                             type="button"
-                            onclick="togglePasswordVisibility()"
+                            onclick="togglePasswordVisibility('login-password', 'eye-icon-login')"
                             class="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
                         >
-                            <svg id="eye-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg id="eye-icon-login" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                             </svg>
@@ -94,12 +91,10 @@
                     </div>
                 </div>
                 
-                <!-- 에러 메시지 -->
                 <div id="login-error" class="hidden text-rose-400 text-sm text-center py-2 px-4 bg-rose-500/10 rounded-xl border border-rose-500/20">
                     비밀번호가 올바르지 않습니다.
                 </div>
                 
-                <!-- 로그인 버튼 -->
                 <button onclick="attemptLogin()" class="btn btn-primary w-full mt-6">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/>
@@ -108,7 +103,6 @@
                 </button>
             </div>
             
-            <!-- 보안 안내 -->
             <div class="mt-8 pt-6 border-t border-white/10 text-center">
                 <div class="flex items-center justify-center gap-2 text-white/30 text-xs">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,7 +115,7 @@
     </div>
     
     <!-- ==========================================
-         Main Dashboard (인증 후 표시)
+         Main Dashboard
          ========================================== -->
     <div id="main-dashboard" class="hidden">
         <div class="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-7xl">
@@ -138,14 +132,21 @@
                             원격 접속 및 서버 모니터링 대시보드
                         </p>
                     </div>
-                    <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-3">
                         <div class="text-sm text-white/70 font-mono bg-white/5 px-4 py-2 rounded-xl border border-white/10">
                             <span id="current-date">----년 --월 --일</span>
                             <span class="mx-2 text-white/30">•</span>
                             <span id="current-time">--:--:--</span>
                         </div>
+                        <!-- 설정 버튼 (비밀번호 변경) -->
+                        <button onclick="openPasswordChangeModal()" class="btn-icon" title="비밀번호 변경">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                        </button>
                         <!-- 로그아웃 버튼 -->
-                        <button onclick="logout()" class="btn btn-ghost text-rose-400 hover:bg-rose-500/10" title="로그아웃">
+                        <button onclick="logout()" class="btn-icon text-rose-400 hover:bg-rose-500/10" title="로그아웃">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                             </svg>
@@ -353,21 +354,35 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <div id="server-groups-container" class="space-y-3">
-                            <!-- Dynamic content -->
-                        </div>
+                        <div id="server-groups-container" class="space-y-3"></div>
                     </div>
                 </div>
             </section>
             
             <!-- Footer -->
             <footer class="mt-12 text-center text-white/30 text-sm">
-                <p>네트워크 관제 센터 v3.0 • SHA-256 & AES-256 보안 적용</p>
+                <p>네트워크 관제 센터 v3.1 • SHA-256 & AES-256 보안 적용</p>
             </footer>
         </div>
+        
+        <!-- ==========================================
+             Floating Button: Xshell Registry Download
+             ========================================== -->
+        <button 
+            onclick="downloadXshellRegistry()" 
+            class="xshell-reg-btn"
+            title="Xshell SSH 프로토콜 핸들러 등록 (.reg 파일 다운로드)"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            <span class="text-xs">Xshell</span>
+        </button>
     </div>
     
-    <!-- Modal: 새 폴더 생성 -->
+    <!-- ==========================================
+         Modal: 새 폴더 생성
+         ========================================== -->
     <div id="folder-modal" class="modal-overlay hidden">
         <div class="modal-container glass-card">
             <div class="modal-header">
@@ -391,7 +406,9 @@
         </div>
     </div>
     
-    <!-- Modal: 서버 추가 -->
+    <!-- ==========================================
+         Modal: 서버 추가
+         ========================================== -->
     <div id="server-modal" class="modal-overlay hidden">
         <div class="modal-container glass-card">
             <div class="modal-header">
@@ -437,7 +454,9 @@
         </div>
     </div>
     
-    <!-- Modal: 폴더 이름 수정 -->
+    <!-- ==========================================
+         Modal: 폴더 이름 수정
+         ========================================== -->
     <div id="edit-folder-modal" class="modal-overlay hidden">
         <div class="modal-container glass-card">
             <div class="modal-header">
@@ -458,6 +477,92 @@
             <div class="modal-footer">
                 <button onclick="closeEditFolderModal()" class="btn btn-ghost">취소</button>
                 <button onclick="updateFolderName()" class="btn btn-primary">저장</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ==========================================
+         Modal: 비밀번호 변경
+         ========================================== -->
+    <div id="password-change-modal" class="modal-overlay hidden">
+        <div class="modal-container glass-card">
+            <div class="modal-header">
+                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+                    </svg>
+                    비밀번호 변경
+                </h3>
+                <button onclick="closePasswordChangeModal()" class="modal-close">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body space-y-4">
+                <!-- 현재 비밀번호 -->
+                <div>
+                    <label class="label">현재 비밀번호</label>
+                    <div class="relative">
+                        <input type="password" id="current-password" class="input pr-12" placeholder="현재 비밀번호 입력" autocomplete="off">
+                        <button type="button" onclick="togglePasswordVisibility('current-password', 'eye-current')" class="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                            <svg id="eye-current" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 새 비밀번호 -->
+                <div>
+                    <label class="label">새 비밀번호</label>
+                    <div class="relative">
+                        <input type="password" id="new-password" class="input pr-12" placeholder="새 비밀번호 입력" autocomplete="off">
+                        <button type="button" onclick="togglePasswordVisibility('new-password', 'eye-new')" class="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                            <svg id="eye-new" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 새 비밀번호 확인 -->
+                <div>
+                    <label class="label">새 비밀번호 확인</label>
+                    <div class="relative">
+                        <input type="password" id="confirm-password" class="input pr-12" placeholder="새 비밀번호 다시 입력" autocomplete="off">
+                        <button type="button" onclick="togglePasswordVisibility('confirm-password', 'eye-confirm')" class="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                            <svg id="eye-confirm" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 에러/성공 메시지 -->
+                <div id="password-change-message" class="hidden text-sm text-center py-2 px-4 rounded-xl"></div>
+                
+                <!-- 주의사항 -->
+                <div class="text-xs text-white/40 bg-white/5 rounded-xl p-3 border border-white/10">
+                    <p class="flex items-start gap-2">
+                        <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <span>비밀번호 변경 시 기존 암호화된 데이터는 새 비밀번호로 재암호화됩니다. 변경된 비밀번호를 반드시 기억해주세요.</span>
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closePasswordChangeModal()" class="btn btn-ghost">취소</button>
+                <button onclick="changePassword()" class="btn btn-primary">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    <span>변경하기</span>
+                </button>
             </div>
         </div>
     </div>
