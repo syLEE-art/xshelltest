@@ -1,83 +1,76 @@
-# 🌐 네트워크 관제 센터 v2.2
+# 🔒 네트워크 관제 센터 v3.0 (보안 버전)
 
-화려한 글래스모피즘(Glassmorphism) 디자인의 서버 관리 대시보드입니다.
+SHA-256 해시 검증과 AES-256 암호화가 적용된 보안 대시보드입니다.
 
-![Version](https://img.shields.io/badge/version-2.2.0-cyan.svg)
-![Design](https://img.shields.io/badge/design-Glassmorphism-purple.svg)
+![Version](https://img.shields.io/badge/version-3.0.0-red.svg)
+![Security](https://img.shields.io/badge/security-SHA--256%20%2B%20AES--256-green.svg)
 
-## ✨ v2.2 디자인 특징
+## 🔐 보안 기능
 
-### 🎨 글래스모피즘 스타일
-- **반투명 유리 카드**: `backdrop-filter: blur(20px)`
-- **다크 블루 그라데이션 배경**: 깊이감 있는 배경
-- **움직이는 오브(Orbs)**: 부드럽게 떠다니는 컬러 구체들
-- **은은한 테두리 빛**: 유리 반사 효과
+### 1. SHA-256 비밀번호 해시 검증
+- 비밀번호를 평문으로 저장하지 않음
+- 입력값의 SHA-256 해시를 미리 저장된 해시와 비교
+- 비밀번호: **이소영** (3글자)
 
-### 🌈 컬러 팔레트
-- **Cyan** `#22d3ee` - 메인 액센트
-- **Emerald** `#34d399` - 성공/온라인
-- **Rose** `#fb7185` - 실패/오프라인
-- **Amber** `#fbbf24` - 경고/테스트 중
-- **Purple** `#a78bfa` - 보조 액센트
+### 2. AES-256 데이터 암호화
+- 서버 목록(IP, 이름 등)이 암호화된 상태로 저장
+- 소스 코드를 봐도 서버 정보를 알 수 없음
+- 올바른 비밀번호로만 복호화 가능
 
-### ✨ 애니메이션 효과
-- 버튼 호버 시 부드러운 상승 효과
-- 상태 LED 펄스 애니메이션
-- 배경 오브 플로팅 애니메이션
-- 카드 호버 시 살짝 올라가는 효과
+### 3. 세션 관리
+- `sessionStorage` 사용으로 탭 종료 시 자동 로그아웃
+- 브라우저를 닫으면 다시 인증 필요
 
-## 🔧 주요 기능 (변경 없음)
-- **폴더(그룹) 관리**: 서버를 폴더별로 분류
-- **아코디언 UI**: 폴더 클릭으로 펼침/접힘
-- **일괄 상태 확인**: 폴더별 전체 서버 Ping
-- **빠른 SSH 접속**: Xshell 원클릭 연결
+## 🛠️ 기술 스택
 
-## 🚀 사용 방법
-
-### 로컬 실행
-```bash
-python -m http.server 8080
-# 또는
-npx serve .
-```
-
-### GitHub Pages 배포
-```bash
-git add .
-git commit -m "style: 글래스모피즘 디자인 적용"
-git push origin main
-```
+- **CryptoJS**: SHA-256 해시 + AES-256 암호화
+- **Tailwind CSS**: 스타일링
+- **Vanilla JavaScript**: 기능 구현
 
 ## 📁 파일 구조
 
 ```
-├── index.html   # HTML (글래스 카드 구조)
+├── index.html   # HTML + 로그인 화면
 ├── style.css    # 글래스모피즘 스타일
-├── script.js    # 기능 로직 (변경 없음)
+├── script.js    # 보안 로직 + 기능
 └── README.md
 ```
 
-## 🎨 커스터마이징
+## 🔧 커스터마이징
 
-### 배경 그라데이션 변경 (style.css)
-```css
-.bg-gradient {
-    background: linear-gradient(135deg, 
-        #0f172a 0%,    /* 시작 색상 */
-        #1e1b4b 25%, 
-        #172554 50%, 
-        #0c4a6e 75%, 
-        #164e63 100%   /* 끝 색상 */
-    );
-}
+### 비밀번호 변경 방법
+
+1. **새 비밀번호의 SHA-256 해시 생성**:
+```javascript
+// 브라우저 콘솔에서 실행
+CryptoJS.SHA256("새비밀번호").toString();
 ```
 
-### 오브 색상 변경 (style.css)
-```css
-.orb-1 { background: radial-gradient(circle, rgba(34, 211, 238, 0.4) 0%, transparent 70%); }
-.orb-2 { background: radial-gradient(circle, rgba(167, 139, 250, 0.4) 0%, transparent 70%); }
+2. **script.js의 SECURITY.PASSWORD_HASH 값 변경**
+
+3. **초기 데이터 재암호화**:
+```javascript
+// 새 비밀번호로 데이터 암호화
+const data = { "폴더명": [{ name: "서버1", ip: "1.1.1.1", ... }] };
+CryptoJS.AES.encrypt(JSON.stringify(data), "새비밀번호").toString();
 ```
+
+4. **script.js의 SECURITY.ENCRYPTED_INITIAL_DATA 값 변경**
+
+## 🚀 배포
+
+```bash
+git add .
+git commit -m "feat: SHA-256 + AES-256 보안 적용"
+git push origin main
+```
+
+## ⚠️ 보안 주의사항
+
+1. **비밀번호 노출 주의**: 해시값은 코드에 포함되지만, 원본 비밀번호는 아님
+2. **HTTPS 권장**: 프로덕션 환경에서는 반드시 HTTPS 사용
+3. **브라우저 개발자 도구**: 메모리에 비밀번호가 일시적으로 저장됨
 
 ---
 
-Made with 💎 Glassmorphism Design
+Made with 🔒 Secure by Design

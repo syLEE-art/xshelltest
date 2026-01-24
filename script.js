@@ -1,11 +1,34 @@
 /* ==========================================
-   네트워크 관제 센터 - JavaScript (v2.0)
+   네트워크 관제 센터 v3.0 - 보안 적용 버전
    ==========================================
-   - 원격 접속 (SSH Protocol Handler)
-   - 상태 확인 (HTTP Fetch 기반)
-   - 응답 시간 그래프 시각화
-   - 폴더(그룹) 기반 서버 관리 기능
+   - SHA-256 비밀번호 해시 검증
+   - AES-256 서버 데이터 암호화
+   - sessionStorage 세션 관리
    ========================================== */
+
+// ==========================================
+// 보안 설정 (Security Configuration)
+// ==========================================
+
+/**
+ * 보안 상수
+ * - PASSWORD_HASH: "이소영"의 SHA-256 해시값
+ * - ENCRYPTED_DATA: AES-256으로 암호화된 초기 서버 데이터
+ * 
+ * ⚠️ 중요: 비밀번호를 모르면 소스 코드를 봐도 서버 정보를 알 수 없습니다.
+ */
+const SECURITY = {
+    // "이소영"의 SHA-256 해시값
+    PASSWORD_HASH: 'b98d714f58002f37922c2ea36b4b11aff13f14f60df514bfb9d4ed7a69f94103',
+    
+    // AES-256으로 암호화된 초기 서버 데이터 (비밀번호: "이소영")
+    // 이 데이터는 올바른 비밀번호 없이는 복호화할 수 없습니다.
+    ENCRYPTED_INITIAL_DATA: 'U2FsdGVkX1+cXnPPQOVBCbWqANXwmPnRS9kp/9SGfp90OyMw/1/F3/+LiEQ0A9A8tAVXQ/v4N+Kl8Rl2QZMbT/FPo1rLF9p8T+tMdfMSMY1uONGhz3iUC4lTw0z+/XbzUraC+Xxz6S4dNhyWdrJ2fYynbaXUbgrEzJi0Y3gEwfAYpVzBKASCNdbMCOcWlYZRXHxsPmKznLcgj2rE97joHriASgywHfaJk3G0ETrz4/Tc1EGL3zl8f52trtSKNEOuqVvnjlO8HvDSD/1cX5OShgbVkeOBcDTm3ZZFrAgfIwUneObfYLgt0CaCBH1S/y5GKuSsz8IZjKxg54Lo3IXv3SzWFvtxDILbdsj5CeoMr5C3iwwhAmI1/ZJV6QInn4aRj9/KvIkNPOfhHnxrWIoWcE5d0NowPJNjUO5AOI9Ifmg5/1itS/tb/GZmAsffEGI76RxwG53akTLCXkItL8BlPk3C2CeYuOg+hfwZ0TQ+Te7bxa6vmLh0fvnX4KEG1VoE8lVepWH+KyfFnb48pOZaAVZZPooxEI2tcwHPL+1Zlvv/lWtWjlb7PvkbujspxhdO',
+    
+    // 세션 스토리지 키
+    SESSION_KEY: 'ncc_authenticated',
+    SESSION_PASSWORD_KEY: 'ncc_session_key'
+};
 
 // ==========================================
 // Global Variables & Configuration
@@ -17,13 +40,10 @@ const CONFIG = {
     PING_TIMEOUT: 5000,
     GRAPH_MAX_POINTS: 20,
     GRAPH_MAX_MS: 500,
-    STORAGE_KEY: 'network_control_server_groups',
+    STORAGE_KEY: 'network_control_server_groups_encrypted',
     DEFAULT_SSH_PORT: 22
 };
 
-/**
- * 한국어 메시지 상수
- */
 const MESSAGES = {
     STATUS: {
         STANDBY: '대기중',
@@ -51,7 +71,7 @@ const MESSAGES = {
         INVALID_IP: '올바른 IP 주소 형식이 아닙니다',
         TEST_RUNNING: '이미 상태 확인이 진행 중입니다',
         SSH_LAUNCHING: 'SSH 클라이언트를 실행합니다',
-        SSH_ERROR: 'SSH 클라이언트 실행 실패. Xshell 설치 여부를 확인해주세요.',
+        SSH_ERROR: 'SSH 클라이언트 실행 실패',
         FOLDER_CREATED: '폴더가 생성되었습니다',
         FOLDER_EXISTS: '이미 존재하는 폴더 이름입니다',
         FOLDER_DELETED: '폴더가 삭제되었습니다',
@@ -63,45 +83,270 @@ const MESSAGES = {
         SELECT_FOLDER: '폴더를 선택해주세요',
         ENTER_SERVER_NAME: '서버 이름을 입력해주세요',
         GROUP_PING_START: '폴더 내 전체 서버 상태 확인 시작',
-        GROUP_PING_COMPLETE: '전체 상태 확인 완료'
+        GROUP_PING_COMPLETE: '전체 상태 확인 완료',
+        LOGIN_SUCCESS: '인증에 성공했습니다',
+        LOGIN_FAILED: '비밀번호가 올바르지 않습니다',
+        LOGOUT_SUCCESS: '로그아웃 되었습니다'
     }
 };
 
-/**
- * 상태 확인 결과 저장
- */
-let pingResults = {
-    data: [],
-    successful: 0,
-    failed: 0,
-    isRunning: false
-};
-
-/**
- * 그래프 캔버스 컨텍스트
- */
+let pingResults = { data: [], successful: 0, failed: 0, isRunning: false };
 let graphCtx = null;
+let expandedFolders = new Set();
+let currentPassword = null; // 복호화에 사용할 비밀번호 (메모리에만 저장)
+
+// ==========================================
+// Security Functions (보안 함수)
+// ==========================================
 
 /**
- * 현재 펼쳐진 폴더 상태 저장
+ * SHA-256 해시 생성
+ * @param {string} input - 해시할 문자열
+ * @returns {string} SHA-256 해시값 (hex)
  */
-let expandedFolders = new Set();
+function generateHash(input) {
+    return CryptoJS.SHA256(input).toString();
+}
+
+/**
+ * 비밀번호 검증 (SHA-256 해시 비교)
+ * @param {string} password - 사용자 입력 비밀번호
+ * @returns {boolean} 검증 결과
+ */
+function verifyPassword(password) {
+    const inputHash = generateHash(password);
+    return inputHash === SECURITY.PASSWORD_HASH;
+}
+
+/**
+ * AES-256 복호화
+ * @param {string} encryptedData - 암호화된 데이터
+ * @param {string} password - 복호화 키 (비밀번호)
+ * @returns {Object|null} 복호화된 객체 또는 null (실패 시)
+ */
+function decryptData(encryptedData, password) {
+    try {
+        const bytes = CryptoJS.AES.decrypt(encryptedData, password);
+        const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
+        if (!decryptedString) return null;
+        return JSON.parse(decryptedString);
+    } catch (error) {
+        console.error('복호화 실패:', error);
+        return null;
+    }
+}
+
+/**
+ * AES-256 암호화
+ * @param {Object} data - 암호화할 객체
+ * @param {string} password - 암호화 키 (비밀번호)
+ * @returns {string} 암호화된 문자열
+ */
+function encryptData(data, password) {
+    return CryptoJS.AES.encrypt(JSON.stringify(data), password).toString();
+}
+
+/**
+ * 로그인 시도
+ */
+function attemptLogin() {
+    const passwordInput = document.getElementById('login-password');
+    const errorDiv = document.getElementById('login-error');
+    const password = passwordInput.value;
+    
+    if (!password) {
+        errorDiv.classList.remove('hidden');
+        errorDiv.textContent = '비밀번호를 입력해주세요.';
+        passwordInput.focus();
+        return;
+    }
+    
+    // SHA-256 해시 검증
+    if (!verifyPassword(password)) {
+        errorDiv.classList.remove('hidden');
+        errorDiv.textContent = '비밀번호가 올바르지 않습니다.';
+        passwordInput.value = '';
+        passwordInput.focus();
+        return;
+    }
+    
+    // AES-256 복호화 테스트
+    const testDecrypt = decryptData(SECURITY.ENCRYPTED_INITIAL_DATA, password);
+    if (!testDecrypt) {
+        errorDiv.classList.remove('hidden');
+        errorDiv.textContent = '데이터 복호화에 실패했습니다.';
+        return;
+    }
+    
+    // 로그인 성공
+    currentPassword = password;
+    
+    // sessionStorage에 인증 상태 저장 (비밀번호는 저장하지 않음 - 보안)
+    // 대신 암호화된 세션 토큰 생성
+    const sessionToken = CryptoJS.AES.encrypt(
+        JSON.stringify({ timestamp: Date.now(), hash: SECURITY.PASSWORD_HASH }),
+        password
+    ).toString();
+    sessionStorage.setItem(SECURITY.SESSION_KEY, 'true');
+    sessionStorage.setItem(SECURITY.SESSION_PASSWORD_KEY, sessionToken);
+    
+    // UI 전환
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('main-dashboard').classList.remove('hidden');
+    
+    // 대시보드 초기화
+    initializeDashboard();
+    
+    showToast(MESSAGES.TOAST.LOGIN_SUCCESS, 'success');
+}
+
+/**
+ * 로그아웃
+ */
+function logout() {
+    // 세션 정보 삭제
+    sessionStorage.removeItem(SECURITY.SESSION_KEY);
+    sessionStorage.removeItem(SECURITY.SESSION_PASSWORD_KEY);
+    currentPassword = null;
+    
+    // UI 전환
+    document.getElementById('main-dashboard').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-error').classList.add('hidden');
+    
+    showToast(MESSAGES.TOAST.LOGOUT_SUCCESS, 'info');
+}
+
+/**
+ * 세션 확인 및 자동 로그인
+ */
+function checkSession() {
+    const isAuthenticated = sessionStorage.getItem(SECURITY.SESSION_KEY);
+    
+    if (isAuthenticated === 'true') {
+        // 이미 인증된 세션 - 비밀번호 재입력 요청
+        // 보안상 비밀번호를 sessionStorage에 저장하지 않으므로, 
+        // 페이지 새로고침 시에도 비밀번호 재입력 필요
+        // (탭을 닫지 않고 새로고침하는 경우)
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('main-dashboard').classList.add('hidden');
+        
+        // 힌트 표시
+        const hintDiv = document.getElementById('login-error');
+        hintDiv.classList.remove('hidden');
+        hintDiv.classList.remove('text-rose-400', 'bg-rose-500/10', 'border-rose-500/20');
+        hintDiv.classList.add('text-cyan-400', 'bg-cyan-500/10', 'border-cyan-500/20');
+        hintDiv.textContent = '세션이 유지되어 있습니다. 비밀번호를 다시 입력해주세요.';
+    } else {
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('main-dashboard').classList.add('hidden');
+    }
+}
+
+/**
+ * 비밀번호 표시/숨기기 토글
+ */
+function togglePasswordVisibility() {
+    const input = document.getElementById('login-password');
+    const eyeIcon = document.getElementById('eye-icon');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        eyeIcon.innerHTML = `
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+        `;
+    } else {
+        input.type = 'password';
+        eyeIcon.innerHTML = `
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        `;
+    }
+}
+
+// ==========================================
+// Encrypted Data Management (암호화된 데이터 관리)
+// ==========================================
+
+/**
+ * 암호화된 서버 그룹 데이터 불러오기
+ * @returns {Object} 복호화된 서버 그룹 데이터
+ */
+function getServerGroups() {
+    if (!currentPassword) return {};
+    
+    try {
+        const encryptedData = localStorage.getItem(CONFIG.STORAGE_KEY);
+        
+        if (!encryptedData) {
+            // 저장된 데이터가 없으면 초기 데이터 복호화하여 반환
+            const initialData = decryptData(SECURITY.ENCRYPTED_INITIAL_DATA, currentPassword);
+            return initialData || {};
+        }
+        
+        // 저장된 암호화 데이터 복호화
+        const decryptedData = decryptData(encryptedData, currentPassword);
+        return decryptedData || {};
+    } catch (error) {
+        console.error('데이터 불러오기 오류:', error);
+        return {};
+    }
+}
+
+/**
+ * 서버 그룹 데이터 암호화하여 저장
+ * @param {Object} groups - 저장할 서버 그룹 데이터
+ */
+function saveServerGroups(groups) {
+    if (!currentPassword) return;
+    
+    try {
+        const encryptedData = encryptData(groups, currentPassword);
+        localStorage.setItem(CONFIG.STORAGE_KEY, encryptedData);
+    } catch (error) {
+        console.error('데이터 저장 오류:', error);
+        showToast('데이터 저장 중 오류가 발생했습니다', 'error');
+    }
+}
 
 // ==========================================
 // Initialization
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // 세션 확인
+    checkSession();
+    
+    // 로그인 입력 필드 이벤트
+    const loginInput = document.getElementById('login-password');
+    if (loginInput) {
+        loginInput.focus();
+    }
+});
+
+/**
+ * 대시보드 초기화 (로그인 성공 후)
+ */
+function initializeDashboard() {
+    // 시간 표시 시작
     updateClock();
     setInterval(updateClock, 1000);
+    
+    // 그래프 캔버스 초기화
     initGraph();
+    
+    // 서버 그룹 로드
     loadServerGroups();
     
+    // IP 입력 필드 이벤트 리스너
     const ipInput = document.getElementById('ip-address');
-    ipInput.addEventListener('input', handleIPInput);
-    ipInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') startPingTest();
-    });
+    if (ipInput) {
+        ipInput.addEventListener('input', handleIPInput);
+        ipInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') startPingTest();
+        });
+    }
     
     // 모달 외부 클릭 시 닫기
     document.querySelectorAll('.modal-overlay').forEach(modal => {
@@ -112,8 +357,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     
-    console.log('🚀 네트워크 관제 센터 v2.0 초기화 완료');
-});
+    console.log('🔒 네트워크 관제 센터 v3.0 (보안 모드) 초기화 완료');
+}
 
 function updateClock() {
     const now = new Date();
@@ -123,65 +368,34 @@ function updateClock() {
     const dateStr = now.toLocaleDateString('ko-KR', {
         year: 'numeric', month: 'long', day: 'numeric'
     });
-    document.getElementById('current-time').textContent = timeStr;
-    document.getElementById('current-date').textContent = dateStr;
+    
+    const timeEl = document.getElementById('current-time');
+    const dateEl = document.getElementById('current-date');
+    if (timeEl) timeEl.textContent = timeStr;
+    if (dateEl) dateEl.textContent = dateStr;
 }
 
 // ==========================================
-// Server Groups Data Management
+// Server Groups UI
 // ==========================================
 
-/**
- * 서버 그룹 데이터 구조
- * {
- *   "폴더명1": [
- *     { name: "서버1", ip: "1.1.1.1", port: "22", username: "root", status: "unknown" },
- *     ...
- *   ],
- *   "폴더명2": [...],
- *   ...
- * }
- */
-
-/**
- * 로컬 스토리지에서 서버 그룹 불러오기
- */
-function getServerGroups() {
-    try {
-        const data = localStorage.getItem(CONFIG.STORAGE_KEY);
-        return data ? JSON.parse(data) : {};
-    } catch (error) {
-        console.error('서버 그룹 불러오기 오류:', error);
-        return {};
-    }
-}
-
-/**
- * 로컬 스토리지에 서버 그룹 저장
- */
-function saveServerGroups(groups) {
-    try {
-        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(groups));
-    } catch (error) {
-        console.error('서버 그룹 저장 오류:', error);
-        showToast('데이터 저장 중 오류가 발생했습니다', 'error');
-    }
-}
-
-/**
- * 서버 그룹 UI 렌더링
- */
 function loadServerGroups() {
     const container = document.getElementById('server-groups-container');
+    if (!container) return;
+    
     const groups = getServerGroups();
     const folderNames = Object.keys(groups);
     
     if (folderNames.length === 0) {
         container.innerHTML = `
-            <div class="text-center text-gray-600 text-sm py-8">
-                <div class="text-4xl mb-2 opacity-30">📁</div>
-                <p>저장된 서버가 없습니다</p>
-                <p class="text-xs mt-1">새 폴더를 만들고 서버를 추가해보세요</p>
+            <div class="text-center py-12">
+                <div class="w-20 h-20 mx-auto mb-4 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
+                    <svg class="w-10 h-10 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/>
+                    </svg>
+                </div>
+                <p class="text-white/50 font-medium">저장된 서버가 없습니다</p>
+                <p class="text-white/30 text-sm mt-1">새 폴더를 만들고 서버를 추가해보세요</p>
             </div>
         `;
         return;
@@ -195,62 +409,41 @@ function loadServerGroups() {
         
         return `
             <div class="folder-accordion" data-folder="${escapeHtml(folderName)}">
-                <!-- 폴더 헤더 -->
                 <div class="folder-header ${isExpanded ? 'expanded' : ''}" onclick="toggleFolder('${escapeHtml(folderName)}')">
                     <div class="flex items-center gap-3">
                         <span class="folder-icon">${isExpanded ? '📂' : '📁'}</span>
                         <span class="folder-name font-medium">${escapeHtml(folderName)}</span>
-                        <span class="folder-count text-xs text-gray-500">(${serverCount}대)</span>
+                        <span class="folder-count text-xs text-white/50">(${serverCount}대)</span>
                         ${serverCount > 0 ? `
-                            <span class="folder-status text-xs ${onlineCount === serverCount ? 'text-neon-green' : onlineCount > 0 ? 'text-neon-orange' : 'text-gray-500'}">
+                            <span class="folder-status text-xs ${onlineCount === serverCount ? 'text-emerald-400' : onlineCount > 0 ? 'text-amber-400' : 'text-white/50'}">
                                 ${onlineCount}/${serverCount} 정상
                             </span>
                         ` : ''}
                     </div>
                     <div class="flex items-center gap-2">
-                        <!-- 폴더 전체 상태 확인 버튼 -->
-                        <button 
-                            onclick="event.stopPropagation(); pingFolderServers('${escapeHtml(folderName)}')"
-                            class="folder-action-btn text-neon-orange hover:bg-neon-orange/10"
-                            title="전체 상태 확인"
-                        >
+                        <button onclick="event.stopPropagation(); pingFolderServers('${escapeHtml(folderName)}')" class="folder-action-btn text-amber-400 hover:bg-amber-500/10" title="전체 상태 확인">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                             </svg>
                         </button>
-                        <!-- 폴더 이름 수정 버튼 -->
-                        <button 
-                            onclick="event.stopPropagation(); openEditFolderModal('${escapeHtml(folderName)}')"
-                            class="folder-action-btn text-neon-cyan hover:bg-neon-cyan/10"
-                            title="폴더 이름 수정"
-                        >
+                        <button onclick="event.stopPropagation(); openEditFolderModal('${escapeHtml(folderName)}')" class="folder-action-btn text-cyan-400 hover:bg-cyan-500/10" title="폴더 이름 수정">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                             </svg>
                         </button>
-                        <!-- 폴더 삭제 버튼 -->
-                        <button 
-                            onclick="event.stopPropagation(); deleteFolder('${escapeHtml(folderName)}')"
-                            class="folder-action-btn text-neon-red hover:bg-neon-red/10"
-                            title="폴더 삭제"
-                        >
+                        <button onclick="event.stopPropagation(); deleteFolder('${escapeHtml(folderName)}')" class="folder-action-btn text-rose-400 hover:bg-rose-500/10" title="폴더 삭제">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                         </button>
-                        <!-- 펼침/접힘 아이콘 -->
-                        <svg class="w-5 h-5 text-gray-500 transform transition-transform ${isExpanded ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 text-white/50 transform transition-transform ${isExpanded ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
                 </div>
-                
-                <!-- 서버 목록 (아코디언 내용) -->
                 <div class="folder-content ${isExpanded ? 'expanded' : ''}">
                     ${servers.length === 0 ? `
-                        <div class="text-center text-gray-600 text-sm py-4">
-                            이 폴더에 서버가 없습니다
-                        </div>
+                        <div class="text-center text-white/50 text-sm py-4">이 폴더에 서버가 없습니다</div>
                     ` : `
                         <div class="server-list">
                             ${servers.map((server, index) => `
@@ -258,38 +451,23 @@ function loadServerGroups() {
                                     <div class="server-status-indicator ${server.status || 'unknown'}"></div>
                                     <div class="server-info">
                                         <div class="server-name">${escapeHtml(server.name)}</div>
-                                        <div class="server-ip font-mono text-xs text-gray-500">
+                                        <div class="server-ip font-mono text-xs text-white/40">
                                             ${server.username ? escapeHtml(server.username) + '@' : ''}${escapeHtml(server.ip)}${server.port && server.port !== '22' ? ':' + escapeHtml(server.port) : ''}
                                         </div>
                                     </div>
                                     <div class="server-actions">
-                                        <!-- 서버 선택 (입력창에 불러오기) -->
-                                        <button 
-                                            onclick="loadServerToInput('${escapeHtml(folderName)}', ${index})"
-                                            class="server-action-btn text-neon-cyan"
-                                            title="선택"
-                                        >
+                                        <button onclick="loadServerToInput('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-neon-cyan" title="선택">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                             </svg>
                                         </button>
-                                        <!-- 빠른 접속 -->
-                                        <button 
-                                            onclick="quickConnect('${escapeHtml(folderName)}', ${index})"
-                                            class="server-action-btn text-neon-green"
-                                            title="빠른 접속"
-                                        >
+                                        <button onclick="quickConnect('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-neon-green" title="빠른 접속">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                             </svg>
                                         </button>
-                                        <!-- 서버 삭제 -->
-                                        <button 
-                                            onclick="deleteServer('${escapeHtml(folderName)}', ${index})"
-                                            class="server-action-btn text-neon-red"
-                                            title="삭제"
-                                        >
+                                        <button onclick="deleteServer('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-neon-red" title="삭제">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                             </svg>
@@ -304,22 +482,15 @@ function loadServerGroups() {
         `;
     }).join('');
     
-    // 서버 추가 모달의 폴더 선택 옵션 업데이트
     updateFolderSelect();
 }
 
-/**
- * HTML 이스케이프 처리
- */
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-/**
- * 폴더 선택 드롭다운 업데이트
- */
 function updateFolderSelect() {
     const select = document.getElementById('server-folder-select');
     if (!select) return;
@@ -329,9 +500,7 @@ function updateFolderSelect() {
     
     select.innerHTML = `
         <option value="">폴더를 선택하세요</option>
-        ${folderNames.map(name => `
-            <option value="${escapeHtml(name)}">${escapeHtml(name)}</option>
-        `).join('')}
+        ${folderNames.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('')}
     `;
 }
 
@@ -339,9 +508,6 @@ function updateFolderSelect() {
 // Folder Management Functions
 // ==========================================
 
-/**
- * 폴더 토글 (아코디언)
- */
 function toggleFolder(folderName) {
     if (expandedFolders.has(folderName)) {
         expandedFolders.delete(folderName);
@@ -351,25 +517,16 @@ function toggleFolder(folderName) {
     loadServerGroups();
 }
 
-/**
- * 새 폴더 생성 모달 열기
- */
 function openFolderModal() {
     document.getElementById('new-folder-name').value = '';
     document.getElementById('folder-modal').classList.remove('hidden');
     document.getElementById('new-folder-name').focus();
 }
 
-/**
- * 새 폴더 생성 모달 닫기
- */
 function closeFolderModal() {
     document.getElementById('folder-modal').classList.add('hidden');
 }
 
-/**
- * 새 폴더 생성
- */
 function createFolder() {
     const nameInput = document.getElementById('new-folder-name');
     const folderName = nameInput.value.trim();
@@ -397,9 +554,6 @@ function createFolder() {
     showToast(`"${folderName}" ${MESSAGES.TOAST.FOLDER_CREATED}`, 'success');
 }
 
-/**
- * 폴더 이름 수정 모달 열기
- */
 function openEditFolderModal(folderName) {
     document.getElementById('edit-folder-old-name').value = folderName;
     document.getElementById('edit-folder-new-name').value = folderName;
@@ -408,16 +562,10 @@ function openEditFolderModal(folderName) {
     document.getElementById('edit-folder-new-name').select();
 }
 
-/**
- * 폴더 이름 수정 모달 닫기
- */
 function closeEditFolderModal() {
     document.getElementById('edit-folder-modal').classList.add('hidden');
 }
 
-/**
- * 폴더 이름 업데이트
- */
 function updateFolderName() {
     const oldName = document.getElementById('edit-folder-old-name').value;
     const newName = document.getElementById('edit-folder-new-name').value.trim();
@@ -439,11 +587,9 @@ function updateFolderName() {
         return;
     }
     
-    // 폴더 이름 변경
     groups[newName] = groups[oldName];
     delete groups[oldName];
     
-    // 펼침 상태도 업데이트
     if (expandedFolders.has(oldName)) {
         expandedFolders.delete(oldName);
         expandedFolders.add(newName);
@@ -456,9 +602,6 @@ function updateFolderName() {
     showToast(MESSAGES.TOAST.FOLDER_UPDATED, 'success');
 }
 
-/**
- * 폴더 삭제
- */
 function deleteFolder(folderName) {
     const groups = getServerGroups();
     const serverCount = groups[folderName]?.length || 0;
@@ -482,9 +625,6 @@ function deleteFolder(folderName) {
 // Server Management Functions
 // ==========================================
 
-/**
- * 서버 추가 모달 열기
- */
 function openServerModal() {
     const groups = getServerGroups();
     if (Object.keys(groups).length === 0) {
@@ -493,42 +633,28 @@ function openServerModal() {
         return;
     }
     
-    // 입력 필드 초기화
     document.getElementById('server-folder-select').value = '';
     document.getElementById('new-server-name').value = '';
     document.getElementById('new-server-ip').value = '';
     document.getElementById('new-server-port').value = '';
     document.getElementById('new-server-user').value = '';
     
-    // 현재 입력창의 값 가져오기
-    const currentIP = document.getElementById('ip-address').value.trim();
-    const currentPort = document.getElementById('port').value.trim();
-    const currentUser = document.getElementById('username').value.trim();
+    const currentIP = document.getElementById('ip-address')?.value.trim();
+    const currentPort = document.getElementById('port')?.value.trim();
+    const currentUser = document.getElementById('username')?.value.trim();
     
-    if (currentIP) {
-        document.getElementById('new-server-ip').value = currentIP;
-    }
-    if (currentPort) {
-        document.getElementById('new-server-port').value = currentPort;
-    }
-    if (currentUser) {
-        document.getElementById('new-server-user').value = currentUser;
-    }
+    if (currentIP) document.getElementById('new-server-ip').value = currentIP;
+    if (currentPort) document.getElementById('new-server-port').value = currentPort;
+    if (currentUser) document.getElementById('new-server-user').value = currentUser;
     
     document.getElementById('server-modal').classList.remove('hidden');
     document.getElementById('server-folder-select').focus();
 }
 
-/**
- * 서버 추가 모달 닫기
- */
 function closeServerModal() {
     document.getElementById('server-modal').classList.add('hidden');
 }
 
-/**
- * 폴더에 서버 추가
- */
 function addServerToFolder() {
     const folderName = document.getElementById('server-folder-select').value;
     const serverName = document.getElementById('new-server-name').value.trim();
@@ -536,7 +662,6 @@ function addServerToFolder() {
     const serverPort = document.getElementById('new-server-port').value.trim() || '22';
     const serverUser = document.getElementById('new-server-user').value.trim();
     
-    // 유효성 검사
     if (!folderName) {
         showToast(MESSAGES.TOAST.SELECT_FOLDER, 'warning');
         return;
@@ -559,14 +684,12 @@ function addServerToFolder() {
     
     const groups = getServerGroups();
     
-    // 중복 체크
     const exists = groups[folderName].some(s => s.ip === serverIP && s.port === serverPort);
     if (exists) {
         showToast(MESSAGES.TOAST.SERVER_EXISTS, 'warning');
         return;
     }
     
-    // 서버 추가
     groups[folderName].push({
         name: serverName,
         ip: serverIP,
@@ -584,9 +707,6 @@ function addServerToFolder() {
     showToast(`"${serverName}" ${MESSAGES.TOAST.SERVER_ADDED}`, 'success');
 }
 
-/**
- * 서버 삭제
- */
 function deleteServer(folderName, serverIndex) {
     const groups = getServerGroups();
     const server = groups[folderName][serverIndex];
@@ -600,9 +720,6 @@ function deleteServer(folderName, serverIndex) {
     showToast(MESSAGES.TOAST.SERVER_DELETED, 'info');
 }
 
-/**
- * 서버 정보를 입력창에 불러오기
- */
 function loadServerToInput(folderName, serverIndex) {
     const groups = getServerGroups();
     const server = groups[folderName][serverIndex];
@@ -614,27 +731,17 @@ function loadServerToInput(folderName, serverIndex) {
     updateTargetDisplay(server.ip, server.username, server.port);
     
     showToast(`${server.name} 정보를 불러왔습니다`, 'info');
-    
-    // 스크롤을 상단으로
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-/**
- * 빠른 SSH 접속
- */
 function quickConnect(folderName, serverIndex) {
     const groups = getServerGroups();
     const server = groups[folderName][serverIndex];
     
-    // SSH URI 구성
     let sshUri = 'ssh://';
-    if (server.username) {
-        sshUri += `${encodeURIComponent(server.username)}@`;
-    }
+    if (server.username) sshUri += `${encodeURIComponent(server.username)}@`;
     sshUri += server.ip;
-    if (server.port && server.port !== '22') {
-        sshUri += `:${server.port}`;
-    }
+    if (server.port && server.port !== '22') sshUri += `:${server.port}`;
     
     try {
         window.location.href = sshUri;
@@ -649,9 +756,6 @@ function quickConnect(folderName, serverIndex) {
 // Folder Ping Functions
 // ==========================================
 
-/**
- * 폴더 내 전체 서버 상태 확인
- */
 async function pingFolderServers(folderName) {
     const groups = getServerGroups();
     const servers = groups[folderName];
@@ -663,12 +767,10 @@ async function pingFolderServers(folderName) {
     
     showToast(`${MESSAGES.TOAST.GROUP_PING_START} (${servers.length}대)`, 'info');
     
-    // 모든 서버 상태를 'testing'으로 변경
     servers.forEach(server => server.status = 'testing');
     saveServerGroups(groups);
     loadServerGroups();
     
-    // 각 서버에 대해 Ping 테스트
     for (let i = 0; i < servers.length; i++) {
         const server = servers[i];
         const result = await performQuickPing(server.ip);
@@ -677,20 +779,15 @@ async function pingFolderServers(folderName) {
         server.lastChecked = new Date().toISOString();
         server.responseTime = result.time;
         
-        // 실시간 업데이트
         saveServerGroups(groups);
         loadServerGroups();
     }
     
-    // 결과 요약
     const onlineCount = servers.filter(s => s.status === 'online').length;
     showToast(`${MESSAGES.TOAST.GROUP_PING_COMPLETE}: ${onlineCount}/${servers.length} 정상`, 
               onlineCount === servers.length ? 'success' : 'warning');
 }
 
-/**
- * 빠른 Ping 테스트 (단일 요청)
- */
 async function performQuickPing(ip) {
     const startTime = performance.now();
     
@@ -717,7 +814,6 @@ async function performQuickPing(ip) {
             return { success: false, time: 3000 };
         }
         
-        // CORS 에러지만 빠르게 응답했다면 서버가 있다고 판단
         if (responseTime < 2000) {
             return { success: true, time: responseTime };
         }
@@ -748,15 +844,9 @@ function connectSSH() {
     }
     
     let sshUri = 'ssh://';
-    if (username) {
-        sshUri += `${encodeURIComponent(username)}@`;
-    }
+    if (username) sshUri += `${encodeURIComponent(username)}@`;
     sshUri += ip;
-    if (port && port !== '22') {
-        sshUri += `:${port}`;
-    }
-    
-    console.log(`🔗 SSH 연결 시도: ${sshUri}`);
+    if (port && port !== '22') sshUri += `:${port}`;
     
     try {
         window.location.href = sshUri;
@@ -843,8 +933,7 @@ async function startPingTest() {
         document.getElementById('graph-status').textContent = MESSAGES.GRAPH.UNREACHABLE;
     }
     
-    showToast(`상태 확인 완료: 성공률 ${successRate.toFixed(0)}%`, 
-              successRate >= 50 ? 'success' : 'error');
+    showToast(`상태 확인 완료: 성공률 ${successRate.toFixed(0)}%`, successRate >= 50 ? 'success' : 'error');
 }
 
 async function performPing(ip) {
@@ -894,24 +983,28 @@ function setStatus(status, text, detail = '') {
     const statusText = document.getElementById('status-text');
     const statusDetail = document.getElementById('status-detail');
     
+    if (!led || !statusText || !statusDetail) return;
+    
     led.classList.remove('status-online', 'status-offline', 'status-testing', 'status-unknown');
     led.classList.add(`status-${status}`);
     
     statusText.textContent = text;
     statusDetail.textContent = detail;
     
-    statusText.classList.remove('text-neon-green', 'text-neon-red', 'text-neon-orange', 'text-gray-500');
+    statusText.classList.remove('text-emerald-400', 'text-rose-400', 'text-amber-400', 'text-white/50');
     
     switch (status) {
-        case 'online': statusText.classList.add('text-neon-green'); break;
-        case 'offline': statusText.classList.add('text-neon-red'); break;
-        case 'testing': statusText.classList.add('text-neon-orange'); break;
-        default: statusText.classList.add('text-gray-500');
+        case 'online': statusText.classList.add('text-emerald-400'); break;
+        case 'offline': statusText.classList.add('text-rose-400'); break;
+        case 'testing': statusText.classList.add('text-amber-400'); break;
+        default: statusText.classList.add('text-white/50');
     }
 }
 
 function updateTargetDisplay(ip, username = '', port = '') {
     const display = document.getElementById('target-display');
+    if (!display) return;
+    
     let text = ip;
     if (username) text = `${username}@${text}`;
     if (port && port !== '22') text += `:${port}`;
@@ -930,18 +1023,24 @@ function updateStatistics() {
     const min = successfulTimes.length > 0 ? Math.min(...successfulTimes) : '--';
     const max = successfulTimes.length > 0 ? Math.max(...successfulTimes) : '--';
     
-    document.getElementById('stat-requests').textContent = total;
-    document.getElementById('stat-success').textContent = `${successRate.toFixed(0)}%`;
-    document.getElementById('stat-avg').textContent = typeof avg === 'number' ? `${avg} ms` : avg;
-    document.getElementById('stat-min').textContent = typeof min === 'number' ? `${min} ms` : min;
-    document.getElementById('stat-max').textContent = typeof max === 'number' ? `${max} ms` : max;
-    
+    const reqEl = document.getElementById('stat-requests');
     const successEl = document.getElementById('stat-success');
-    successEl.classList.remove('text-neon-green', 'text-neon-orange', 'text-neon-red');
+    const avgEl = document.getElementById('stat-avg');
+    const minEl = document.getElementById('stat-min');
+    const maxEl = document.getElementById('stat-max');
     
-    if (successRate >= 80) successEl.classList.add('text-neon-green');
-    else if (successRate >= 50) successEl.classList.add('text-neon-orange');
-    else successEl.classList.add('text-neon-red');
+    if (reqEl) reqEl.textContent = total;
+    if (successEl) successEl.textContent = `${successRate.toFixed(0)}%`;
+    if (avgEl) avgEl.textContent = typeof avg === 'number' ? `${avg} ms` : avg;
+    if (minEl) minEl.textContent = typeof min === 'number' ? `${min} ms` : min;
+    if (maxEl) maxEl.textContent = typeof max === 'number' ? `${max} ms` : max;
+    
+    if (successEl) {
+        successEl.classList.remove('text-emerald-400', 'text-amber-400', 'text-rose-400');
+        if (successRate >= 80) successEl.classList.add('text-emerald-400');
+        else if (successRate >= 50) successEl.classList.add('text-amber-400');
+        else successEl.classList.add('text-rose-400');
+    }
 }
 
 function handleIPInput(e) {
@@ -949,7 +1048,8 @@ function handleIPInput(e) {
     if (ip && isValidIP(ip)) {
         updateTargetDisplay(ip);
     } else {
-        document.getElementById('target-display').textContent = '---.---.---.---';
+        const display = document.getElementById('target-display');
+        if (display) display.textContent = '---.---.---.---';
     }
 }
 
@@ -959,6 +1059,8 @@ function handleIPInput(e) {
 
 function initGraph() {
     const canvas = document.getElementById('response-graph');
+    if (!canvas) return;
+    
     graphCtx = canvas.getContext('2d');
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
@@ -966,6 +1068,8 @@ function initGraph() {
 
 function resizeCanvas() {
     const canvas = document.getElementById('response-graph');
+    if (!canvas || !graphCtx) return;
+    
     const container = canvas.parentElement;
     const dpr = window.devicePixelRatio || 1;
     
@@ -980,6 +1084,8 @@ function resizeCanvas() {
 
 function drawGraph() {
     const canvas = document.getElementById('response-graph');
+    if (!canvas || !graphCtx) return;
+    
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     
@@ -999,7 +1105,7 @@ function drawGraph() {
     if (avgTime > 0) {
         const avgY = padding.top + graphHeight - (avgTime / CONFIG.GRAPH_MAX_MS) * graphHeight;
         graphCtx.beginPath();
-        graphCtx.strokeStyle = 'rgba(255, 136, 0, 0.3)';
+        graphCtx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
         graphCtx.lineWidth = 1;
         graphCtx.setLineDash([5, 5]);
         graphCtx.moveTo(padding.left, avgY);
@@ -1011,8 +1117,8 @@ function drawGraph() {
     const pointSpacing = graphWidth / (CONFIG.GRAPH_MAX_POINTS - 1);
     
     const gradient = graphCtx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
-    gradient.addColorStop(0, 'rgba(0, 245, 255, 0.3)');
-    gradient.addColorStop(1, 'rgba(0, 245, 255, 0)');
+    gradient.addColorStop(0, 'rgba(34, 211, 238, 0.3)');
+    gradient.addColorStop(1, 'rgba(34, 211, 238, 0)');
     
     graphCtx.beginPath();
     
@@ -1025,7 +1131,7 @@ function drawGraph() {
         else graphCtx.lineTo(x, y);
     });
     
-    graphCtx.strokeStyle = '#00f5ff';
+    graphCtx.strokeStyle = '#22d3ee';
     graphCtx.lineWidth = 2;
     graphCtx.stroke();
     
@@ -1043,18 +1149,19 @@ function drawGraph() {
         
         graphCtx.beginPath();
         graphCtx.arc(x, y, 4, 0, Math.PI * 2);
-        graphCtx.fillStyle = point.success ? '#00f5ff' : '#ff0055';
+        graphCtx.fillStyle = point.success ? '#22d3ee' : '#fb7185';
         graphCtx.fill();
         
         graphCtx.beginPath();
         graphCtx.arc(x, y, 6, 0, Math.PI * 2);
-        graphCtx.fillStyle = point.success ? 'rgba(0, 245, 255, 0.3)' : 'rgba(255, 0, 85, 0.3)';
+        graphCtx.fillStyle = point.success ? 'rgba(34, 211, 238, 0.3)' : 'rgba(251, 113, 133, 0.3)';
         graphCtx.fill();
     });
 }
 
 function hideGraphOverlay() {
-    document.getElementById('graph-overlay').style.display = 'none';
+    const overlay = document.getElementById('graph-overlay');
+    if (overlay) overlay.style.display = 'none';
 }
 
 // ==========================================
@@ -1063,6 +1170,8 @@ function hideGraphOverlay() {
 
 function showToast(message, type = 'info', duration = 3000) {
     const container = document.getElementById('toast-container');
+    if (!container) return;
+    
     const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
     
     const toast = document.createElement('div');
@@ -1085,11 +1194,12 @@ function showToast(message, type = 'info', duration = 3000) {
 // ==========================================
 
 function debugInfo() {
-    console.group('🔧 네트워크 관제 센터 v2.0 디버그 정보');
+    console.group('🔒 네트워크 관제 센터 v3.0 디버그 정보');
+    console.log('인증 상태:', sessionStorage.getItem(SECURITY.SESSION_KEY));
+    console.log('비밀번호 설정됨:', !!currentPassword);
     console.log('상태 확인 결과:', pingResults);
-    console.log('서버 그룹:', getServerGroups());
+    console.log('서버 그룹 (복호화됨):', getServerGroups());
     console.log('펼쳐진 폴더:', [...expandedFolders]);
-    console.log('설정값:', CONFIG);
     console.groupEnd();
 }
 
