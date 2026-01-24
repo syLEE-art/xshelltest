@@ -13,7 +13,12 @@ SHA-256 해시 검증, AES-256 암호화, 비밀번호 변경 기능이 적용�
 - 변경된 비밀번호로 데이터 자동 재암호화
 - localStorage에 새 해시값 저장
 
-### 2. 📥 Xshell 레지스트리 파일 다운로드
+### 2. 🔄 비밀번호 초기화 기능
+- 로그인 화면 하단의 **비밀번호 초기화** 링크 클릭
+- 확인 후 기본 비밀번호(dlthdud)로 되돌림
+- localStorage의 커스텀 해시 및 암호화 데이터 삭제
+
+### 3. 📥 Xshell 레지스트리 파일 다운로드
 - 화면 좌측 하단의 **Xshell** 버튼 클릭
 - `xshell_ssh_protocol_handler.reg` 파일 다운로드
 - 실행 시 `ssh://` 프로토콜이 Xshell 7과 연결됨
@@ -61,8 +66,9 @@ git push origin main
 ## ⚠️ 주의사항
 
 1. **기본 비밀번호**: `dlthdud` (첫 로그인 시 사용)
-2. **비밀번호 분실 시**: localStorage의 `ncc_custom_password_hash` 삭제 후 기본 비밀번호로 로그인
-3. **Xshell 경로**: 기본 경로는 `C:\Program Files (x86)\NetSarang\Xshell 7\Xshell.exe`
+2. **비밀번호 분실 시**: 로그인 화면의 "비밀번호 초기화" 링크 클릭
+3. **초기화 시 주의**: 변경된 비밀번호로 암호화된 서버 데이터는 복구 불가
+4. **Xshell 경로**: 기본 경로는 `C:\Program Files (x86)\NetSarang\Xshell 7\Xshell.exe`
 
 ---
 

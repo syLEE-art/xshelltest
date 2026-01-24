@@ -12,7 +12,7 @@
 // ==========================================
 
 const SECURITY = {
-    // 기본 비밀번호 "dlthdud"의 SHA-256 해시값
+    // 기본 비밀번호 "dlthdud"의 SHA-256 해시값 (CryptoJS 계산)
     DEFAULT_PASSWORD_HASH: 'db97cb66bad0d531ab03b5e39d9626fc8d85015615a082a00bb526486a3e49cf',
     
     // 사용자 정의 해시를 저장할 localStorage 키
@@ -197,6 +197,32 @@ function showLoginError(message) {
     errorDiv.classList.remove('hidden', 'text-cyan-400', 'bg-cyan-500/10', 'border-cyan-500/20');
     errorDiv.classList.add('text-rose-400', 'bg-rose-500/10', 'border-rose-500/20');
     errorDiv.textContent = message;
+}
+
+/**
+ * 비밀번호 초기화
+ * - localStorage에서 커스텀 해시와 암호화된 데이터 삭제
+ * - 기본 비밀번호(dlthdud)로 되돌림
+ */
+function resetPassword() {
+    const confirmReset = confirm(
+        '비밀번호를 초기 상태(dlthdud)로 되돌리시겠습니까?\n\n' +
+        '⚠️ 주의: 변경된 비밀번호로 암호화된 서버 데이터가 있다면 접근할 수 없게 됩니다.'
+    );
+    
+    if (!confirmReset) return;
+    
+    // localStorage에서 비밀번호 관련 데이터 삭제
+    localStorage.removeItem(SECURITY.CUSTOM_HASH_KEY);
+    localStorage.removeItem(SECURITY.STORAGE_KEY);
+    
+    // sessionStorage 클리어
+    sessionStorage.removeItem(SECURITY.SESSION_KEY);
+    
+    alert('비밀번호가 초기화되었습니다.\n초기 비밀번호: dlthdud');
+    
+    // 페이지 새로고침
+    location.reload();
 }
 
 /**
