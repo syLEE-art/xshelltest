@@ -206,7 +206,7 @@ function showLoginError(message) {
  */
 function resetPassword() {
     const confirmReset = confirm(
-        '비밀번호를 초기 상태(dlthdud)로 되돌리시겠습니까?\n\n' +
+        '비밀번호를 초기 상태로 되돌리시겠습니까?\n\n' +
         '⚠️ 주의: 변경된 비밀번호로 암호화된 서버 데이터가 있다면 접근할 수 없게 됩니다.'
     );
     
@@ -219,7 +219,7 @@ function resetPassword() {
     // sessionStorage 클리어
     sessionStorage.removeItem(SECURITY.SESSION_KEY);
     
-    alert('비밀번호가 초기화되었습니다.\n초기 비밀번호: dlthdud');
+    alert('비밀번호가 초기화되었습니다.');
     
     // 페이지 새로고침
     location.reload();
