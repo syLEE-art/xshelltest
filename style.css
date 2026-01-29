@@ -672,6 +672,13 @@ select.input option {
     min-width: 0;
 }
 
+.server-description {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .server-name {
     font-size: 0.9375rem;
     color: var(--text-primary);
@@ -1019,7 +1026,7 @@ select.input option {
 .xshell-reg-btn {
     position: fixed;
     bottom: 24px;
-    left: 24px;
+    right: 24px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -1053,7 +1060,7 @@ select.input option {
 @media (max-width: 480px) {
     .xshell-reg-btn {
         bottom: 16px;
-        left: 16px;
+        right: 16px;
         padding: 8px 12px;
     }
     

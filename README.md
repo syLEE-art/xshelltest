@@ -1,75 +1,92 @@
-# 🔒 네트워크 관제 센터 v3.1
+# 🌐 네트워크 관제 센터 v4.0
 
-SHA-256 해시 검증, AES-256 암호화, 비밀번호 변경 기능이 적용된 보안 대시보드입니다.
+보안 기능이 제거되고 Xshell 통합 설정 등록 기능이 추가된 경량화 버전입니다.
 
-![Version](https://img.shields.io/badge/version-3.1.0-red.svg)
-![Security](https://img.shields.io/badge/security-SHA--256%20%2B%20AES--256-green.svg)
+![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)
 
-## ✨ v3.1 새로운 기능
+## ✨ v4.0 주요 변경사항
 
-### 1. 🔑 비밀번호 변경 기능
-- 헤더의 ⚙️ 설정 버튼 클릭
-- 현재 비밀번호 확인 후 새 비밀번호 설정
-- 변경된 비밀번호로 데이터 자동 재암호화
-- localStorage에 새 해시값 저장
+### 🔓 보안 기능 제거
+- 비밀번호 입력 없이 바로 대시보드 접속
+- 데이터 암호화 없이 일반 JSON으로 localStorage에 저장
+- CryptoJS 라이브러리 제거 (경량화)
 
-### 2. 🔄 비밀번호 초기화 기능
-- 로그인 화면 하단의 **비밀번호 초기화** 링크 클릭
-- 확인 후 기본 비밀번호로 되돌림
-- localStorage의 커스텀 해시 및 암호화 데이터 삭제
+### 🛠️ Xshell 통합 설정 등록 (모든 버전 지원)
+- 화면 **우측 하단**의 `Xshell 통합 설정` 버튼 클릭
+- `.bat` 파일 다운로드 후 **관리자 권한으로 실행**
+- 와일드카드 탐색으로 Xshell 5, 6, 7 등 모든 버전 자동 감지
 
-### 3. 📥 Xshell 레지스트리 파일 다운로드
-- 화면 좌측 하단의 **Xshell** 버튼 클릭
-- `xshell_ssh_protocol_handler.reg` 파일 다운로드
-- 실행 시 `ssh://` 프로토콜이 Xshell 7과 연결됨
-
-## 🔐 보안 기능
-
-### SHA-256 비밀번호 해시 검증
-```
-기본 비밀번호: dlthdud
-해시값: db97cb66bad0d531ab03b5e39d9626fc8d85015615a082a00bb526486a3e49cf
+```batch
+:: 자동 탐색 로직
+for /d %%D in ("C:\Program Files\NetSarang\Xshell*") do ...
+for /d %%D in ("C:\Program Files (x86)\NetSarang\Xshell*") do ...
 ```
 
-### AES-256 데이터 암호화
-- 서버 목록이 암호화된 상태로 localStorage에 저장
-- 올바른 비밀번호로만 복호화 가능
-- 비밀번호 변경 시 데이터 재암호화
+### 📝 서버 메모(Description) 기능
+- 각 서버에 설명 추가 가능
+- 서버 카드에 메모 표시 (truncate 처리)
+- 수정 모달에서 메모 편집
 
-### 세션 관리
-- sessionStorage 사용으로 탭 종료 시 자동 로그아웃
-
-## 🛠️ 기본 기능
+## 🚀 기존 기능
 
 - **Xshell SSH 원격 접속**: `ssh://` 프로토콜 핸들러
 - **폴더(그룹) 관리**: 서버 분류 및 아코디언 UI
-- **상태 확인**: HTTP Fetch 기반 Ping 테스트
+- **상태 확인**: HTTP Fetch 기반 Ping 테스트 (이미지 프로브)
 - **응답 시간 그래프**: Canvas 시각화
+- **글래스모피즘 디자인**: 애니메이션 배경 + 유리 효과
 
 ## 📁 파일 구조
 
 ```
-├── index.html   # HTML (로그인, 대시보드, 모달)
+├── index.html   # HTML (대시보드, 모달)
 ├── style.css    # 글래스모피즘 스타일
-├── script.js    # 보안 로직 + 기능
+├── script.js    # 기능 로직
 └── README.md
+```
+
+## 🔧 사용 방법
+
+### 1. Xshell 프로토콜 핸들러 등록
+1. 우측 하단 `Xshell 통합 설정` 버튼 클릭
+2. `xshell_ssh_register.bat` 파일 다운로드
+3. **관리자 권한**으로 배치 파일 실행
+4. 등록 완료 후 ssh:// 링크 클릭 시 Xshell 자동 실행
+
+### 2. 서버 관리
+1. `새 폴더` 버튼으로 카테고리 생성
+2. `서버 추가` 버튼으로 서버 등록 (메모 추가 가능)
+3. 서버 카드의 ⚡ 버튼으로 빠른 접속
+4. 📊 버튼으로 폴더 내 전체 서버 상태 확인
+
+## 📊 데이터 저장
+
+```javascript
+// localStorage 키
+const STORAGE_KEY = 'network_control_server_groups';
+
+// 데이터 구조 (일반 JSON)
+{
+  "폴더명": [
+    {
+      "name": "서버명",
+      "ip": "192.168.1.1",
+      "port": "22",
+      "username": "root",
+      "description": "서버 설명",
+      "status": "online"
+    }
+  ]
+}
 ```
 
 ## 🚀 배포
 
 ```bash
 git add .
-git commit -m "feat: 비밀번호 변경 및 Xshell 레지스트리 다운로드 기능 추가"
+git commit -m "feat: v4.0 - 보안 제거, Xshell 통합 설정 등록"
 git push origin main
 ```
 
-## ⚠️ 주의사항
-
-1. **기본 비밀번호**: `dlthdud` (첫 로그인 시 사용)
-2. **비밀번호 분실 시**: 로그인 화면의 "비밀번호 초기화" 링크 클릭
-3. **초기화 시 주의**: 변경된 비밀번호로 암호화된 서버 데이터는 복구 불가
-4. **Xshell 경로**: 기본 경로는 `C:\Program Files (x86)\NetSarang\Xshell 7\Xshell.exe`
-
 ---
 
-Made with 🔒 Secure by Design
+Made with 🌐 Network Control Center

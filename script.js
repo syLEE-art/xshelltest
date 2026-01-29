@@ -1,35 +1,14 @@
 /* ==========================================
-   네트워크 관제 센터 v3.1 - 보안 업그레이드 버전
+   네트워크 관제 센터 v4.0
    ==========================================
-   - SHA-256 비밀번호 해시 검증
-   - AES-256 서버 데이터 암호화
-   - 비밀번호 변경 기능
-   - Xshell 레지스트리 등록 파일 다운로드
+   - 보안 기능 제거 (직접 접속)
+   - Xshell 통합 설정 등록 (모든 버전 지원)
+   - 폴더 그룹화 + 서버 메모 기능
+   - 이미지 프로브 핑 체크
    ========================================== */
 
 // ==========================================
-// 보안 설정 (Security Configuration)
-// ==========================================
-
-const SECURITY = {
-    // 기본 비밀번호 "dlthdud"의 SHA-256 해시값 (CryptoJS 계산)
-    DEFAULT_PASSWORD_HASH: 'db97cb66bad0d531ab03b5e39d9626fc8d85015615a082a00bb526486a3e49cf',
-    
-    // 사용자 정의 해시를 저장할 localStorage 키
-    CUSTOM_HASH_KEY: 'ncc_custom_password_hash',
-    
-    // AES-256으로 암호화된 초기 서버 데이터 (비밀번호: "dlthdud")
-    ENCRYPTED_INITIAL_DATA: 'U2FsdGVkX1+9v95RbwdQ3Aa1r5s5qM1eFiFc9wzqCdhiodgeR6Q6UURmY2J6a5wSFVb/Div21qBqEpYVoN4G+O8sC2+yTFf3x3YOesQlcuQTWEJ+v4WyRwGepx17SWk0PqdYDW65atDpmpG/JS4GFmyNgLRSnc53WVcFa4RvNn0hYk7/UqGBprqzD73uB/AHzL0yVEnddaaB+KwByrre3gxANgdSMBHDZjIKMY2ttKR8ti1tQ6eg2MBDQj8y74Y4vgy/3jp/b+rRxgwP0qLeCNe1Wm14kIvGfYe8Cqg37spXTMVdJH3vVWYz664pYo8gZ8Aoh/pZyeo1b8driQq1cU3JDc8MfunNrzdq0zYu1fNfliQjf60cTfUsmu1yyiniPYPMBZP7JllIQOpAA0o0WVRg6y5sMB4VevS0fLr/Ud6Lym1ADrr/CbVqscXY4I39kskTpLMLYQmKreA2nc6MFA6DlTJ20TjZmL/CcCSbbwDks4s6Ho52y7HeuOAvZxCKsoWwixTpj27EQMNiv7v1j7BbUxc4fdH7Jenat5bhFgrHWGOIZqKnBaHVqEWSdSnI',
-    
-    // 세션 스토리지 키
-    SESSION_KEY: 'ncc_authenticated',
-    
-    // 암호화된 데이터 저장 키
-    STORAGE_KEY: 'network_control_server_groups_encrypted'
-};
-
-// ==========================================
-// Global Variables & Configuration
+// Configuration
 // ==========================================
 
 const CONFIG = {
@@ -38,6 +17,7 @@ const CONFIG = {
     PING_TIMEOUT: 5000,
     GRAPH_MAX_POINTS: 20,
     GRAPH_MAX_MS: 500,
+    STORAGE_KEY: 'network_control_server_groups',
     DEFAULT_SSH_PORT: 22
 };
 
@@ -76,370 +56,151 @@ const MESSAGES = {
         FOLDER_EMPTY_NAME: '폴더 이름을 입력해주세요',
         SERVER_ADDED: '서버가 추가되었습니다',
         SERVER_DELETED: '서버가 삭제되었습니다',
+        SERVER_UPDATED: '서버 정보가 수정되었습니다',
         SERVER_EXISTS: '이미 등록된 서버입니다',
         SELECT_FOLDER: '폴더를 선택해주세요',
         ENTER_SERVER_NAME: '서버 이름을 입력해주세요',
         GROUP_PING_START: '폴더 내 전체 서버 상태 확인 시작',
         GROUP_PING_COMPLETE: '전체 상태 확인 완료',
-        LOGIN_SUCCESS: '인증에 성공했습니다',
-        LOGIN_FAILED: '비밀번호가 올바르지 않습니다',
-        LOGOUT_SUCCESS: '로그아웃 되었습니다',
-        PASSWORD_CHANGED: '비밀번호가 변경되었습니다',
-        XSHELL_REG_DOWNLOADED: 'Xshell 레지스트리 파일이 다운로드되었습니다'
+        XSHELL_BATCH_DOWNLOADED: 'Xshell 통합 설정 파일이 다운로드되었습니다'
     }
+};
+
+// 초기 샘플 데이터
+const INITIAL_DATA = {
+    "개발 서버": [
+        { name: "웹서버 #1", ip: "192.168.1.10", port: "22", username: "admin", status: "unknown", description: "개발용 웹 서버" },
+        { name: "DB서버", ip: "192.168.1.20", port: "3306", username: "root", status: "unknown", description: "MySQL 데이터베이스" }
+    ],
+    "운영 서버": [
+        { name: "메인 서버", ip: "10.0.0.1", port: "22", username: "operator", status: "unknown", description: "프로덕션 메인 서버" },
+        { name: "백업 서버", ip: "10.0.0.2", port: "22", username: "backup", status: "unknown", description: "DR 백업 서버" }
+    ]
 };
 
 let pingResults = { data: [], successful: 0, failed: 0, isRunning: false };
 let graphCtx = null;
 let expandedFolders = new Set();
-let currentPassword = null;
 
 // ==========================================
-// Security Functions
+// Data Management (일반 JSON - 암호화 없음)
 // ==========================================
 
 /**
- * SHA-256 해시 생성
+ * 서버 그룹 데이터 불러오기
  */
-function generateHash(input) {
-    return CryptoJS.SHA256(input).toString();
-}
-
-/**
- * 현재 유효한 비밀번호 해시 가져오기
- * (사용자 정의 해시가 있으면 그것을, 없으면 기본 해시 반환)
- */
-function getValidPasswordHash() {
-    const customHash = localStorage.getItem(SECURITY.CUSTOM_HASH_KEY);
-    return customHash || SECURITY.DEFAULT_PASSWORD_HASH;
-}
-
-/**
- * 비밀번호 검증
- */
-function verifyPassword(password) {
-    const inputHash = generateHash(password);
-    const validHash = getValidPasswordHash();
-    return inputHash === validHash;
-}
-
-/**
- * AES-256 복호화
- */
-function decryptData(encryptedData, password) {
+function getServerGroups() {
     try {
-        const bytes = CryptoJS.AES.decrypt(encryptedData, password);
-        const decryptedString = bytes.toString(CryptoJS.enc.Utf8);
-        if (!decryptedString) return null;
-        return JSON.parse(decryptedString);
+        const data = localStorage.getItem(CONFIG.STORAGE_KEY);
+        if (!data) {
+            // 초기 데이터 저장 및 반환
+            saveServerGroups(INITIAL_DATA);
+            return INITIAL_DATA;
+        }
+        return JSON.parse(data);
     } catch (error) {
-        console.error('복호화 실패:', error);
-        return null;
+        console.error('데이터 불러오기 오류:', error);
+        return {};
     }
 }
 
 /**
- * AES-256 암호화
+ * 서버 그룹 데이터 저장
  */
-function encryptData(data, password) {
-    return CryptoJS.AES.encrypt(JSON.stringify(data), password).toString();
-}
-
-/**
- * 로그인 시도
- */
-function attemptLogin() {
-    const passwordInput = document.getElementById('login-password');
-    const errorDiv = document.getElementById('login-error');
-    const password = passwordInput.value;
-    
-    if (!password) {
-        showLoginError('비밀번호를 입력해주세요.');
-        passwordInput.focus();
-        return;
-    }
-    
-    // SHA-256 해시 검증
-    if (!verifyPassword(password)) {
-        showLoginError('비밀번호가 올바르지 않습니다.');
-        passwordInput.value = '';
-        passwordInput.focus();
-        return;
-    }
-    
-    // 복호화 테스트 - 기존 데이터가 있으면 그것으로, 없으면 초기 데이터로
-    const savedEncryptedData = localStorage.getItem(SECURITY.STORAGE_KEY);
-    const testData = savedEncryptedData || SECURITY.ENCRYPTED_INITIAL_DATA;
-    const testDecrypt = decryptData(testData, password);
-    
-    if (!testDecrypt && savedEncryptedData) {
-        // 저장된 데이터가 있는데 복호화 실패 = 비밀번호가 변경된 상태에서 다른 비밀번호 입력
-        showLoginError('데이터 복호화에 실패했습니다. 비밀번호를 확인해주세요.');
-        return;
-    }
-    
-    // 로그인 성공
-    currentPassword = password;
-    sessionStorage.setItem(SECURITY.SESSION_KEY, 'true');
-    
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('main-dashboard').classList.remove('hidden');
-    
-    initializeDashboard();
-    showToast(MESSAGES.TOAST.LOGIN_SUCCESS, 'success');
-}
-
-/**
- * 로그인 에러 표시
- */
-function showLoginError(message) {
-    const errorDiv = document.getElementById('login-error');
-    errorDiv.classList.remove('hidden', 'text-cyan-400', 'bg-cyan-500/10', 'border-cyan-500/20');
-    errorDiv.classList.add('text-rose-400', 'bg-rose-500/10', 'border-rose-500/20');
-    errorDiv.textContent = message;
-}
-
-/**
- * 비밀번호 초기화
- * - localStorage에서 커스텀 해시와 암호화된 데이터 삭제
- * - 기본 비밀번호(dlthdud)로 되돌림
- */
-function resetPassword() {
-    const confirmReset = confirm(
-        '비밀번호를 초기 상태로 되돌리시겠습니까?\n\n' +
-        '⚠️ 주의: 변경된 비밀번호로 암호화된 서버 데이터가 있다면 접근할 수 없게 됩니다.'
-    );
-    
-    if (!confirmReset) return;
-    
-    // localStorage에서 비밀번호 관련 데이터 삭제
-    localStorage.removeItem(SECURITY.CUSTOM_HASH_KEY);
-    localStorage.removeItem(SECURITY.STORAGE_KEY);
-    
-    // sessionStorage 클리어
-    sessionStorage.removeItem(SECURITY.SESSION_KEY);
-    
-    alert('비밀번호가 초기화되었습니다.');
-    
-    // 페이지 새로고침
-    location.reload();
-}
-
-/**
- * 로그아웃
- */
-function logout() {
-    sessionStorage.removeItem(SECURITY.SESSION_KEY);
-    currentPassword = null;
-    
-    document.getElementById('main-dashboard').classList.add('hidden');
-    document.getElementById('login-screen').classList.remove('hidden');
-    document.getElementById('login-password').value = '';
-    document.getElementById('login-error').classList.add('hidden');
-    
-    showToast(MESSAGES.TOAST.LOGOUT_SUCCESS, 'info');
-}
-
-/**
- * 세션 확인
- */
-function checkSession() {
-    document.getElementById('login-screen').classList.remove('hidden');
-    document.getElementById('main-dashboard').classList.add('hidden');
-}
-
-/**
- * 비밀번호 표시/숨기기 토글
- */
-function togglePasswordVisibility(inputId, iconId) {
-    const input = document.getElementById(inputId);
-    const icon = document.getElementById(iconId);
-    
-    if (input.type === 'password') {
-        input.type = 'text';
-        icon.innerHTML = `
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
-        `;
-    } else {
-        input.type = 'password';
-        icon.innerHTML = `
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-        `;
-    }
-}
-
-// ==========================================
-// Password Change Functions
-// ==========================================
-
-/**
- * 비밀번호 변경 모달 열기
- */
-function openPasswordChangeModal() {
-    document.getElementById('current-password').value = '';
-    document.getElementById('new-password').value = '';
-    document.getElementById('confirm-password').value = '';
-    document.getElementById('password-change-message').classList.add('hidden');
-    document.getElementById('password-change-modal').classList.remove('hidden');
-    document.getElementById('current-password').focus();
-}
-
-/**
- * 비밀번호 변경 모달 닫기
- */
-function closePasswordChangeModal() {
-    document.getElementById('password-change-modal').classList.add('hidden');
-}
-
-/**
- * 비밀번호 변경 메시지 표시
- */
-function showPasswordChangeMessage(message, isError = true) {
-    const msgDiv = document.getElementById('password-change-message');
-    msgDiv.classList.remove('hidden', 'text-rose-400', 'bg-rose-500/10', 'border-rose-500/20',
-                            'text-emerald-400', 'bg-emerald-500/10', 'border-emerald-500/20');
-    
-    if (isError) {
-        msgDiv.classList.add('text-rose-400', 'bg-rose-500/10', 'border', 'border-rose-500/20');
-    } else {
-        msgDiv.classList.add('text-emerald-400', 'bg-emerald-500/10', 'border', 'border-emerald-500/20');
-    }
-    msgDiv.textContent = message;
-}
-
-/**
- * 비밀번호 변경 처리
- */
-function changePassword() {
-    const currentPwd = document.getElementById('current-password').value;
-    const newPwd = document.getElementById('new-password').value;
-    const confirmPwd = document.getElementById('confirm-password').value;
-    
-    // 유효성 검사
-    if (!currentPwd) {
-        showPasswordChangeMessage('현재 비밀번호를 입력해주세요.');
-        document.getElementById('current-password').focus();
-        return;
-    }
-    
-    if (!newPwd) {
-        showPasswordChangeMessage('새 비밀번호를 입력해주세요.');
-        document.getElementById('new-password').focus();
-        return;
-    }
-    
-    if (newPwd.length < 4) {
-        showPasswordChangeMessage('새 비밀번호는 4자 이상이어야 합니다.');
-        document.getElementById('new-password').focus();
-        return;
-    }
-    
-    if (newPwd !== confirmPwd) {
-        showPasswordChangeMessage('새 비밀번호가 일치하지 않습니다.');
-        document.getElementById('confirm-password').focus();
-        return;
-    }
-    
-    if (currentPwd === newPwd) {
-        showPasswordChangeMessage('현재 비밀번호와 다른 비밀번호를 입력해주세요.');
-        document.getElementById('new-password').focus();
-        return;
-    }
-    
-    // 현재 비밀번호 검증
-    if (!verifyPassword(currentPwd)) {
-        showPasswordChangeMessage('현재 비밀번호가 올바르지 않습니다.');
-        document.getElementById('current-password').value = '';
-        document.getElementById('current-password').focus();
-        return;
-    }
-    
+function saveServerGroups(groups) {
     try {
-        // 1. 현재 데이터 복호화
-        const currentData = getServerGroups();
-        
-        // 2. 새 비밀번호 해시 저장
-        const newHash = generateHash(newPwd);
-        localStorage.setItem(SECURITY.CUSTOM_HASH_KEY, newHash);
-        
-        // 3. 현재 비밀번호 업데이트
-        currentPassword = newPwd;
-        
-        // 4. 데이터를 새 비밀번호로 재암호화하여 저장
-        saveServerGroups(currentData);
-        
-        showPasswordChangeMessage('비밀번호가 성공적으로 변경되었습니다.', false);
-        showToast(MESSAGES.TOAST.PASSWORD_CHANGED, 'success');
-        
-        // 2초 후 모달 닫기
-        setTimeout(() => {
-            closePasswordChangeModal();
-        }, 2000);
-        
+        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(groups));
     } catch (error) {
-        console.error('비밀번호 변경 오류:', error);
-        showPasswordChangeMessage('비밀번호 변경 중 오류가 발생했습니다.');
+        console.error('데이터 저장 오류:', error);
+        showToast('데이터 저장 중 오류가 발생했습니다', 'error');
     }
 }
 
 // ==========================================
-// Xshell Registry File Download
+// Xshell 통합 설정 등록 (배치 파일)
 // ==========================================
 
 /**
- * Xshell SSH 프로토콜 핸들러 레지스트리 파일 다운로드
+ * Xshell 통합 설정 배치 파일 다운로드
+ * - 와일드카드 탐색으로 모든 버전 지원
  */
-function downloadXshellRegistry() {
-    // Windows Registry 파일 내용
-    const regContent = `Windows Registry Editor Version 5.00
+function downloadXshellBatch() {
+    const batchContent = `@echo off
+chcp 65001 >nul
+title Xshell SSH 프로토콜 핸들러 통합 등록
 
-; ==========================================
-; Xshell 7 SSH Protocol Handler Registration
-; 네트워크 관제 센터 - SSH 프로토콜 연동
-; ==========================================
+echo ============================================
+echo   Xshell SSH 프로토콜 핸들러 통합 등록
+echo   (모든 버전 자동 탐색)
+echo ============================================
+echo.
 
-; SSH 프로토콜 핸들러 등록
-[HKEY_CLASSES_ROOT\\ssh]
-@="URL:SSH Protocol"
-"URL Protocol"=""
+set "target="
 
-[HKEY_CLASSES_ROOT\\ssh\\DefaultIcon]
-@="C:\\\\Program Files (x86)\\\\NetSarang\\\\Xshell 7\\\\Xshell.exe,0"
+:: Program Files 및 (x86) 폴더에서 Xshell* 패턴으로 모든 버전을 검색
+for /d %%D in ("C:\\Program Files\\NetSarang\\Xshell*") do (
+    if exist "%%D\\Xshell.exe" (
+        set "target=%%D\\Xshell.exe"
+        echo [발견] %%D\\Xshell.exe
+    )
+)
 
-[HKEY_CLASSES_ROOT\\ssh\\shell]
+for /d %%D in ("C:\\Program Files (x86)\\NetSarang\\Xshell*") do (
+    if exist "%%D\\Xshell.exe" (
+        set "target=%%D\\Xshell.exe"
+        echo [발견] %%D\\Xshell.exe
+    )
+)
 
-[HKEY_CLASSES_ROOT\\ssh\\shell\\open]
+if not defined target (
+    echo.
+    echo [오류] Xshell 설치 경로를 찾을 수 없습니다.
+    echo        Xshell이 설치되어 있는지 확인해주세요.
+    echo.
+    pause
+    exit /b 1
+)
 
-[HKEY_CLASSES_ROOT\\ssh\\shell\\open\\command]
-@="\\"C:\\\\Program Files (x86)\\\\NetSarang\\\\Xshell 7\\\\Xshell.exe\\" -url \\"%1\\""
+echo.
+echo [선택된 경로] %target%
+echo.
+echo 레지스트리에 SSH 프로토콜 핸들러를 등록합니다...
+echo.
 
-; ==========================================
-; 사용법:
-; 1. 이 파일을 더블클릭하여 실행합니다.
-; 2. "예"를 클릭하여 레지스트리에 추가합니다.
-; 3. 이후 ssh:// 링크 클릭 시 Xshell 7이 실행됩니다.
-;
-; 주의사항:
-; - Xshell 7이 기본 경로에 설치되어 있어야 합니다.
-; - 다른 경로에 설치된 경우 위 경로를 수정해주세요.
-; - 관리자 권한이 필요할 수 있습니다.
-; ==========================================
+:: SSH 프로토콜 핸들러 등록
+reg add "HKEY_CLASSES_ROOT\\ssh" /ve /t REG_SZ /d "URL:SSH Protocol" /f >nul 2>&1
+reg add "HKEY_CLASSES_ROOT\\ssh" /v "URL Protocol" /t REG_SZ /d "" /f >nul 2>&1
+reg add "HKEY_CLASSES_ROOT\\ssh\\DefaultIcon" /ve /t REG_SZ /d "\\"%target%\\",0" /f >nul 2>&1
+reg add "HKEY_CLASSES_ROOT\\ssh\\shell" /ve /t REG_SZ /d "" /f >nul 2>&1
+reg add "HKEY_CLASSES_ROOT\\ssh\\shell\\open" /ve /t REG_SZ /d "" /f >nul 2>&1
+reg add "HKEY_CLASSES_ROOT\\ssh\\shell\\open\\command" /ve /t REG_SZ /d "\\"%target%\\" -url \\"%%1\\"" /f >nul 2>&1
+
+if %errorlevel% equ 0 (
+    echo ============================================
+    echo   등록이 완료되었습니다!
+    echo ============================================
+    echo.
+    echo   이제 ssh:// 링크를 클릭하면
+    echo   Xshell이 자동으로 실행됩니다.
+    echo.
+) else (
+    echo.
+    echo [오류] 레지스트리 등록에 실패했습니다.
+    echo        관리자 권한으로 다시 실행해주세요.
+    echo.
+)
+
+pause
 `;
 
-    // Blob 생성 (UTF-16 LE with BOM for .reg files)
-    const bom = new Uint8Array([0xFF, 0xFE]); // UTF-16 LE BOM
-    const encoder = new TextEncoder();
-    const utf8Content = encoder.encode(regContent);
-    
-    // UTF-8로 충분 (Windows Registry Editor가 자동 인식)
-    const blob = new Blob([regContent], { type: 'application/octet-stream' });
+    // Blob 생성 (ANSI 인코딩 호환을 위해 UTF-8 BOM 없이)
+    const blob = new Blob([batchContent], { type: 'application/octet-stream' });
     
     // 다운로드 링크 생성
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'xshell_ssh_protocol_handler.reg';
+    link.download = 'xshell_ssh_register.bat';
     
     // 다운로드 실행
     document.body.appendChild(link);
@@ -449,49 +210,7 @@ function downloadXshellRegistry() {
     // URL 해제
     URL.revokeObjectURL(url);
     
-    showToast(MESSAGES.TOAST.XSHELL_REG_DOWNLOADED, 'success');
-}
-
-// ==========================================
-// Encrypted Data Management
-// ==========================================
-
-/**
- * 서버 그룹 데이터 불러오기 (복호화)
- */
-function getServerGroups() {
-    if (!currentPassword) return {};
-    
-    try {
-        const encryptedData = localStorage.getItem(SECURITY.STORAGE_KEY);
-        
-        if (!encryptedData) {
-            // 저장된 데이터 없으면 초기 데이터 복호화
-            const initialData = decryptData(SECURITY.ENCRYPTED_INITIAL_DATA, currentPassword);
-            return initialData || {};
-        }
-        
-        const decryptedData = decryptData(encryptedData, currentPassword);
-        return decryptedData || {};
-    } catch (error) {
-        console.error('데이터 불러오기 오류:', error);
-        return {};
-    }
-}
-
-/**
- * 서버 그룹 데이터 저장 (암호화)
- */
-function saveServerGroups(groups) {
-    if (!currentPassword) return;
-    
-    try {
-        const encryptedData = encryptData(groups, currentPassword);
-        localStorage.setItem(SECURITY.STORAGE_KEY, encryptedData);
-    } catch (error) {
-        console.error('데이터 저장 오류:', error);
-        showToast('데이터 저장 중 오류가 발생했습니다', 'error');
-    }
+    showToast(MESSAGES.TOAST.XSHELL_BATCH_DOWNLOADED, 'success');
 }
 
 // ==========================================
@@ -499,21 +218,21 @@ function saveServerGroups(groups) {
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    checkSession();
-    
-    const loginInput = document.getElementById('login-password');
-    if (loginInput) {
-        loginInput.focus();
-    }
+    initializeDashboard();
 });
 
 function initializeDashboard() {
+    // 시간 표시 시작
     updateClock();
     setInterval(updateClock, 1000);
     
+    // 그래프 캔버스 초기화
     initGraph();
+    
+    // 서버 그룹 로드
     loadServerGroups();
     
+    // IP 입력 필드 이벤트 리스너
     const ipInput = document.getElementById('ip-address');
     if (ipInput) {
         ipInput.addEventListener('input', handleIPInput);
@@ -522,6 +241,7 @@ function initializeDashboard() {
         });
     }
     
+    // 모달 외부 클릭 시 닫기
     document.querySelectorAll('.modal-overlay').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -530,7 +250,7 @@ function initializeDashboard() {
         });
     });
     
-    console.log('🔒 네트워크 관제 센터 v3.1 초기화 완료');
+    console.log('🌐 네트워크 관제 센터 v4.0 초기화 완료');
 }
 
 function updateClock() {
@@ -622,25 +342,35 @@ function loadServerGroups() {
                             ${servers.map((server, index) => `
                                 <div class="server-item" data-server-index="${index}">
                                     <div class="server-status-indicator ${server.status || 'unknown'}"></div>
-                                    <div class="server-info">
+                                    <div class="server-info flex-1">
                                         <div class="server-name">${escapeHtml(server.name)}</div>
                                         <div class="server-ip font-mono text-xs text-white/40">
                                             ${server.username ? escapeHtml(server.username) + '@' : ''}${escapeHtml(server.ip)}${server.port && server.port !== '22' ? ':' + escapeHtml(server.port) : ''}
                                         </div>
+                                        ${server.description ? `
+                                            <div class="server-description text-xs text-white/30 mt-1 truncate" title="${escapeHtml(server.description)}">
+                                                📝 ${escapeHtml(server.description)}
+                                            </div>
+                                        ` : ''}
                                     </div>
                                     <div class="server-actions">
-                                        <button onclick="loadServerToInput('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-neon-cyan" title="선택">
+                                        <button onclick="loadServerToInput('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-cyan-400" title="선택">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                             </svg>
                                         </button>
-                                        <button onclick="quickConnect('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-neon-green" title="빠른 접속">
+                                        <button onclick="quickConnect('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-emerald-400" title="빠른 접속">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                             </svg>
                                         </button>
-                                        <button onclick="deleteServer('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-neon-red" title="삭제">
+                                        <button onclick="openEditServerModal('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-amber-400" title="수정">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                            </svg>
+                                        </button>
+                                        <button onclick="deleteServer('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-rose-400" title="삭제">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                             </svg>
@@ -659,6 +389,7 @@ function loadServerGroups() {
 }
 
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
@@ -811,6 +542,7 @@ function openServerModal() {
     document.getElementById('new-server-ip').value = '';
     document.getElementById('new-server-port').value = '';
     document.getElementById('new-server-user').value = '';
+    document.getElementById('new-server-description').value = '';
     
     const currentIP = document.getElementById('ip-address')?.value.trim();
     const currentPort = document.getElementById('port')?.value.trim();
@@ -834,6 +566,7 @@ function addServerToFolder() {
     const serverIP = document.getElementById('new-server-ip').value.trim();
     const serverPort = document.getElementById('new-server-port').value.trim() || '22';
     const serverUser = document.getElementById('new-server-user').value.trim();
+    const serverDesc = document.getElementById('new-server-description').value.trim();
     
     if (!folderName) {
         showToast(MESSAGES.TOAST.SELECT_FOLDER, 'warning');
@@ -868,6 +601,7 @@ function addServerToFolder() {
         ip: serverIP,
         port: serverPort,
         username: serverUser,
+        description: serverDesc,
         status: 'unknown',
         addedAt: new Date().toISOString()
     });
@@ -878,6 +612,45 @@ function addServerToFolder() {
     closeServerModal();
     
     showToast(`"${serverName}" ${MESSAGES.TOAST.SERVER_ADDED}`, 'success');
+}
+
+function openEditServerModal(folderName, serverIndex) {
+    const groups = getServerGroups();
+    const server = groups[folderName][serverIndex];
+    
+    document.getElementById('edit-server-folder').value = folderName;
+    document.getElementById('edit-server-index').value = serverIndex;
+    document.getElementById('edit-server-name').value = server.name;
+    document.getElementById('edit-server-description').value = server.description || '';
+    
+    document.getElementById('edit-server-modal').classList.remove('hidden');
+    document.getElementById('edit-server-name').focus();
+}
+
+function closeEditServerModal() {
+    document.getElementById('edit-server-modal').classList.add('hidden');
+}
+
+function updateServerInfo() {
+    const folderName = document.getElementById('edit-server-folder').value;
+    const serverIndex = parseInt(document.getElementById('edit-server-index').value);
+    const newName = document.getElementById('edit-server-name').value.trim();
+    const newDesc = document.getElementById('edit-server-description').value.trim();
+    
+    if (!newName) {
+        showToast(MESSAGES.TOAST.ENTER_SERVER_NAME, 'warning');
+        return;
+    }
+    
+    const groups = getServerGroups();
+    groups[folderName][serverIndex].name = newName;
+    groups[folderName][serverIndex].description = newDesc;
+    
+    saveServerGroups(groups);
+    loadServerGroups();
+    closeEditServerModal();
+    
+    showToast(MESSAGES.TOAST.SERVER_UPDATED, 'success');
 }
 
 function deleteServer(folderName, serverIndex) {
@@ -1367,11 +1140,10 @@ function showToast(message, type = 'info', duration = 3000) {
 // ==========================================
 
 function debugInfo() {
-    console.group('🔒 네트워크 관제 센터 v3.1 디버그 정보');
-    console.log('인증 상태:', sessionStorage.getItem(SECURITY.SESSION_KEY));
-    console.log('비밀번호 설정됨:', !!currentPassword);
-    console.log('커스텀 해시 존재:', !!localStorage.getItem(SECURITY.CUSTOM_HASH_KEY));
+    console.group('🌐 네트워크 관제 센터 v4.0 디버그 정보');
     console.log('서버 그룹:', getServerGroups());
+    console.log('펼쳐진 폴더:', [...expandedFolders]);
+    console.log('핑 결과:', pingResults);
     console.groupEnd();
 }
 
