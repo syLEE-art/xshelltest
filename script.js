@@ -1,11 +1,24 @@
 /* ==========================================
-   네트워크 관제 센터 v4.0
+   네트워크 관제 센터 v4.1 - Nord Theme
    ==========================================
-   - 보안 기능 제거 (직접 접속)
-   - Xshell 통합 설정 등록 (모든 버전 지원)
+   - 눈이 편한 Nord 색상 팔레트
    - 폴더 그룹화 + 서버 메모 기능
-   - 이미지 프로브 핑 체크
+   - Xshell 통합 등록
    ========================================== */
+
+// ==========================================
+// Nord Color Constants (for Canvas)
+// ==========================================
+const NORD_COLORS = {
+    frost2: '#88C0D0',      // 메인 강조 (시안)
+    frost3: '#81A1C1',      // 블루
+    auroraGreen: '#A3BE8C', // 온라인/성공
+    auroraRed: '#BF616A',   // 오프라인/에러
+    auroraYellow: '#EBCB8B',// 테스트/경고
+    nord3: '#4C566A',       // 테두리/보조
+    nord4: '#D8DEE9',       // 텍스트
+    nord6: '#ECEFF4'        // 밝은 텍스트
+};
 
 // ==========================================
 // Configuration
@@ -83,17 +96,13 @@ let graphCtx = null;
 let expandedFolders = new Set();
 
 // ==========================================
-// Data Management (일반 JSON - 암호화 없음)
+// Data Management
 // ==========================================
 
-/**
- * 서버 그룹 데이터 불러오기
- */
 function getServerGroups() {
     try {
         const data = localStorage.getItem(CONFIG.STORAGE_KEY);
         if (!data) {
-            // 초기 데이터 저장 및 반환
             saveServerGroups(INITIAL_DATA);
             return INITIAL_DATA;
         }
@@ -104,9 +113,6 @@ function getServerGroups() {
     }
 }
 
-/**
- * 서버 그룹 데이터 저장
- */
 function saveServerGroups(groups) {
     try {
         localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(groups));
@@ -120,10 +126,6 @@ function saveServerGroups(groups) {
 // Xshell 통합 설정 등록 (배치 파일)
 // ==========================================
 
-/**
- * Xshell 통합 설정 배치 파일 다운로드
- * - 와일드카드 탐색으로 모든 버전 지원
- */
 function downloadXshellBatch() {
     const batchContent = `@echo off
 chcp 65001 >nul
@@ -193,21 +195,14 @@ if %errorlevel% equ 0 (
 pause
 `;
 
-    // Blob 생성 (ANSI 인코딩 호환을 위해 UTF-8 BOM 없이)
     const blob = new Blob([batchContent], { type: 'application/octet-stream' });
-    
-    // 다운로드 링크 생성
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = 'xshell_ssh_register.bat';
-    
-    // 다운로드 실행
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    // URL 해제
     URL.revokeObjectURL(url);
     
     showToast(MESSAGES.TOAST.XSHELL_BATCH_DOWNLOADED, 'success');
@@ -222,17 +217,12 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initializeDashboard() {
-    // 시간 표시 시작
     updateClock();
     setInterval(updateClock, 1000);
     
-    // 그래프 캔버스 초기화
     initGraph();
-    
-    // 서버 그룹 로드
     loadServerGroups();
     
-    // IP 입력 필드 이벤트 리스너
     const ipInput = document.getElementById('ip-address');
     if (ipInput) {
         ipInput.addEventListener('input', handleIPInput);
@@ -241,7 +231,6 @@ function initializeDashboard() {
         });
     }
     
-    // 모달 외부 클릭 시 닫기
     document.querySelectorAll('.modal-overlay').forEach(modal => {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -250,7 +239,7 @@ function initializeDashboard() {
         });
     });
     
-    console.log('🌐 네트워크 관제 센터 v4.0 초기화 완료');
+    console.log('🌐 네트워크 관제 센터 v4.1 (Nord Theme) 초기화 완료');
 }
 
 function updateClock() {
@@ -281,14 +270,14 @@ function loadServerGroups() {
     
     if (folderNames.length === 0) {
         container.innerHTML = `
-            <div class="text-center py-12">
-                <div class="w-20 h-20 mx-auto mb-4 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <svg class="w-10 h-10 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div style="text-align: center; padding: 3rem 1rem;">
+                <div style="width: 64px; height: 64px; margin: 0 auto 1rem; background-color: var(--nord2); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+                    <svg style="width: 32px; height: 32px; color: var(--nord3);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z"/>
                     </svg>
                 </div>
-                <p class="text-white/50 font-medium">저장된 서버가 없습니다</p>
-                <p class="text-white/30 text-sm mt-1">새 폴더를 만들고 서버를 추가해보세요</p>
+                <p style="color: var(--nord4); font-weight: 500;">저장된 서버가 없습니다</p>
+                <p style="color: var(--nord3); font-size: 0.875rem; margin-top: 0.25rem;">새 폴더를 만들고 서버를 추가해보세요</p>
             </div>
         `;
         return;
@@ -303,75 +292,75 @@ function loadServerGroups() {
         return `
             <div class="folder-accordion" data-folder="${escapeHtml(folderName)}">
                 <div class="folder-header ${isExpanded ? 'expanded' : ''}" onclick="toggleFolder('${escapeHtml(folderName)}')">
-                    <div class="flex items-center gap-3">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
                         <span class="folder-icon">${isExpanded ? '📂' : '📁'}</span>
-                        <span class="folder-name font-medium">${escapeHtml(folderName)}</span>
-                        <span class="folder-count text-xs text-white/50">(${serverCount}대)</span>
+                        <span class="folder-name">${escapeHtml(folderName)}</span>
+                        <span class="folder-count">(${serverCount}대)</span>
                         ${serverCount > 0 ? `
-                            <span class="folder-status text-xs ${onlineCount === serverCount ? 'text-emerald-400' : onlineCount > 0 ? 'text-amber-400' : 'text-white/50'}">
+                            <span class="folder-status" style="color: ${onlineCount === serverCount ? 'var(--aurora-green)' : onlineCount > 0 ? 'var(--aurora-yellow)' : 'var(--nord3)'};">
                                 ${onlineCount}/${serverCount} 정상
                             </span>
                         ` : ''}
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="event.stopPropagation(); pingFolderServers('${escapeHtml(folderName)}')" class="folder-action-btn text-amber-400 hover:bg-amber-500/10" title="전체 상태 확인">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <button onclick="event.stopPropagation(); pingFolderServers('${escapeHtml(folderName)}')" class="folder-action-btn text-amber-400" title="전체 상태 확인">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                             </svg>
                         </button>
-                        <button onclick="event.stopPropagation(); openEditFolderModal('${escapeHtml(folderName)}')" class="folder-action-btn text-cyan-400 hover:bg-cyan-500/10" title="폴더 이름 수정">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button onclick="event.stopPropagation(); openEditFolderModal('${escapeHtml(folderName)}')" class="folder-action-btn text-cyan-400" title="폴더 이름 수정">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                             </svg>
                         </button>
-                        <button onclick="event.stopPropagation(); deleteFolder('${escapeHtml(folderName)}')" class="folder-action-btn text-rose-400 hover:bg-rose-500/10" title="폴더 삭제">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button onclick="event.stopPropagation(); deleteFolder('${escapeHtml(folderName)}')" class="folder-action-btn text-rose-400" title="폴더 삭제">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                             </svg>
                         </button>
-                        <svg class="w-5 h-5 text-white/50 transform transition-transform ${isExpanded ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg style="width: 20px; height: 20px; color: var(--nord3); transform: ${isExpanded ? 'rotate(180deg)' : 'rotate(0)'}; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                         </svg>
                     </div>
                 </div>
                 <div class="folder-content ${isExpanded ? 'expanded' : ''}">
                     ${servers.length === 0 ? `
-                        <div class="text-center text-white/50 text-sm py-4">이 폴더에 서버가 없습니다</div>
+                        <div style="text-align: center; color: var(--nord3); font-size: 0.875rem; padding: 1rem;">이 폴더에 서버가 없습니다</div>
                     ` : `
                         <div class="server-list">
                             ${servers.map((server, index) => `
                                 <div class="server-item" data-server-index="${index}">
                                     <div class="server-status-indicator ${server.status || 'unknown'}"></div>
-                                    <div class="server-info flex-1">
+                                    <div class="server-info">
                                         <div class="server-name">${escapeHtml(server.name)}</div>
-                                        <div class="server-ip font-mono text-xs text-white/40">
+                                        <div class="server-ip">
                                             ${server.username ? escapeHtml(server.username) + '@' : ''}${escapeHtml(server.ip)}${server.port && server.port !== '22' ? ':' + escapeHtml(server.port) : ''}
                                         </div>
                                         ${server.description ? `
-                                            <div class="server-description text-xs text-white/30 mt-1 truncate" title="${escapeHtml(server.description)}">
+                                            <div class="server-description" title="${escapeHtml(server.description)}">
                                                 📝 ${escapeHtml(server.description)}
                                             </div>
                                         ` : ''}
                                     </div>
                                     <div class="server-actions">
                                         <button onclick="loadServerToInput('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-cyan-400" title="선택">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                             </svg>
                                         </button>
                                         <button onclick="quickConnect('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-emerald-400" title="빠른 접속">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                                             </svg>
                                         </button>
                                         <button onclick="openEditServerModal('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-amber-400" title="수정">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
                                             </svg>
                                         </button>
                                         <button onclick="deleteServer('${escapeHtml(folderName)}', ${index})" class="server-action-btn text-rose-400" title="삭제">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                             </svg>
                                         </button>
@@ -937,13 +926,13 @@ function setStatus(status, text, detail = '') {
     statusText.textContent = text;
     statusDetail.textContent = detail;
     
-    statusText.classList.remove('text-emerald-400', 'text-rose-400', 'text-amber-400', 'text-white/50');
-    
+    // Nord 색상 적용
+    statusText.style.color = '';
     switch (status) {
-        case 'online': statusText.classList.add('text-emerald-400'); break;
-        case 'offline': statusText.classList.add('text-rose-400'); break;
-        case 'testing': statusText.classList.add('text-amber-400'); break;
-        default: statusText.classList.add('text-white/50');
+        case 'online': statusText.style.color = NORD_COLORS.auroraGreen; break;
+        case 'offline': statusText.style.color = NORD_COLORS.auroraRed; break;
+        case 'testing': statusText.style.color = NORD_COLORS.auroraYellow; break;
+        default: statusText.style.color = NORD_COLORS.nord3;
     }
 }
 
@@ -981,11 +970,11 @@ function updateStatistics() {
     if (minEl) minEl.textContent = typeof min === 'number' ? `${min} ms` : min;
     if (maxEl) maxEl.textContent = typeof max === 'number' ? `${max} ms` : max;
     
+    // 성공률에 따른 색상 변경
     if (successEl) {
-        successEl.classList.remove('text-emerald-400', 'text-amber-400', 'text-rose-400');
-        if (successRate >= 80) successEl.classList.add('text-emerald-400');
-        else if (successRate >= 50) successEl.classList.add('text-amber-400');
-        else successEl.classList.add('text-rose-400');
+        if (successRate >= 80) successEl.style.color = NORD_COLORS.auroraGreen;
+        else if (successRate >= 50) successEl.style.color = NORD_COLORS.auroraYellow;
+        else successEl.style.color = NORD_COLORS.auroraRed;
     }
 }
 
@@ -1048,10 +1037,11 @@ function drawGraph() {
     const avgTime = successfulTimes.length > 0
         ? successfulTimes.reduce((a, b) => a + b, 0) / successfulTimes.length : 0;
     
+    // 평균선 (Nord Yellow)
     if (avgTime > 0) {
         const avgY = padding.top + graphHeight - (avgTime / CONFIG.GRAPH_MAX_MS) * graphHeight;
         graphCtx.beginPath();
-        graphCtx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
+        graphCtx.strokeStyle = 'rgba(235, 203, 139, 0.4)';
         graphCtx.lineWidth = 1;
         graphCtx.setLineDash([5, 5]);
         graphCtx.moveTo(padding.left, avgY);
@@ -1062,9 +1052,10 @@ function drawGraph() {
     
     const pointSpacing = graphWidth / (CONFIG.GRAPH_MAX_POINTS - 1);
     
+    // 그라데이션 (Nord Frost)
     const gradient = graphCtx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
-    gradient.addColorStop(0, 'rgba(34, 211, 238, 0.3)');
-    gradient.addColorStop(1, 'rgba(34, 211, 238, 0)');
+    gradient.addColorStop(0, 'rgba(136, 192, 208, 0.3)');
+    gradient.addColorStop(1, 'rgba(136, 192, 208, 0)');
     
     graphCtx.beginPath();
     
@@ -1077,7 +1068,7 @@ function drawGraph() {
         else graphCtx.lineTo(x, y);
     });
     
-    graphCtx.strokeStyle = '#22d3ee';
+    graphCtx.strokeStyle = NORD_COLORS.frost2;
     graphCtx.lineWidth = 2;
     graphCtx.stroke();
     
@@ -1088,6 +1079,7 @@ function drawGraph() {
     graphCtx.fillStyle = gradient;
     graphCtx.fill();
     
+    // 데이터 포인트
     data.forEach((point, index) => {
         const x = padding.left + (index * pointSpacing);
         const normalizedTime = Math.min(point.time, CONFIG.GRAPH_MAX_MS);
@@ -1095,12 +1087,12 @@ function drawGraph() {
         
         graphCtx.beginPath();
         graphCtx.arc(x, y, 4, 0, Math.PI * 2);
-        graphCtx.fillStyle = point.success ? '#22d3ee' : '#fb7185';
+        graphCtx.fillStyle = point.success ? NORD_COLORS.frost2 : NORD_COLORS.auroraRed;
         graphCtx.fill();
         
         graphCtx.beginPath();
         graphCtx.arc(x, y, 6, 0, Math.PI * 2);
-        graphCtx.fillStyle = point.success ? 'rgba(34, 211, 238, 0.3)' : 'rgba(251, 113, 133, 0.3)';
+        graphCtx.fillStyle = point.success ? 'rgba(136, 192, 208, 0.3)' : 'rgba(191, 97, 106, 0.3)';
         graphCtx.fill();
     });
 }
@@ -1123,14 +1115,14 @@ function showToast(message, type = 'info', duration = 3000) {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
-        <span class="text-lg">${icons[type]}</span>
+        <span style="font-size: 1.125rem;">${icons[type]}</span>
         <span>${message}</span>
     `;
     
     container.appendChild(toast);
     
     setTimeout(() => {
-        toast.style.animation = 'slide-in 0.3s ease-out reverse';
+        toast.style.animation = 'toast-in 0.3s ease-out reverse';
         setTimeout(() => toast.remove(), 300);
     }, duration);
 }
@@ -1140,7 +1132,7 @@ function showToast(message, type = 'info', duration = 3000) {
 // ==========================================
 
 function debugInfo() {
-    console.group('🌐 네트워크 관제 센터 v4.0 디버그 정보');
+    console.group('🌐 네트워크 관제 센터 v4.1 (Nord Theme) 디버그');
     console.log('서버 그룹:', getServerGroups());
     console.log('펼쳐진 폴더:', [...expandedFolders]);
     console.log('핑 결과:', pingResults);
